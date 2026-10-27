@@ -1,0 +1,37 @@
+{
+  "profile": {
+    "name": "Amie Bilbrey",
+    "metrics": {
+      "views": "16k",
+      "comments": "194",
+      "shares": "1.9k",
+      "likes": "114"
+    }
+  },
+  "navigation": [
+    {
+      "category": "Overview",
+      "items": ["Accounts", "Snapchat+", "Support", "Privacy and Safety", "Your Privacy Choices", "Consumer Health Privacy"]
+    },
+    {
+      "category": "Business",
+      "items": ["For Business", "Ads Manager", "Business Support"]
+    },
+    {
+      "category": "Snap AR",
+      "items": ["Lens Studio"]
+    },
+    {
+      "category": "Creator",
+      "items": ["For Creators"]
+    },
+    {
+      "category": "Developers",
+      "items": ["For developers", "Playcanvas"]
+    },
+    {
+      "category": "Spectacles",
+      "items": ["Overview", "Creator", "Spectacles Support"]
+    }
+  ]
+}

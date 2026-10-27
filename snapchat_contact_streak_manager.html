@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SnapDex - Snapchat User & Streak Manager</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        snap: {
+                            yellow: '#FFFC00',
+                            yellowHover: '#E6E300',
+                            darkBg: '#090D16',
+                            cardBg: '#131C2E',
+                            cardBorder: '#1E293B',
+                            purple: '#9900F0',
+                            accent: '#00D95A'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #090D16;
+            color: #F8FAFC;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #090D16;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1E293B;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #334155;
+        }
+        .snap-glow {
+            box-shadow: 0 0 15px rgba(255, 252, 0, 0.25);
+        }
+        .snap-glow-hover:hover {
+            box-shadow: 0 0 20px rgba(255, 252, 0, 0.4);
+        }
+        .glass-panel {
+            background: rgba(19, 28, 46, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-snap-yellow selection:text-black">
+
+    <!-- Toast Notification Area -->
+    <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Navigation Header -->
+    <header class="sticky top-0 z-30 glass-panel border-b border-slate-800/80 px-4 lg:px-8 py-3.5">
+        <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
+            <!-- Logo & Title -->
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-snap-yellow text-black flex items-center justify-center font-black text-xl shadow-lg shadow-snap-yellow/20">
+                    <i class="fa-ghost fa-solid"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight tracking-tight flex items-center gap-2">
+                        SnapDex <span class="text-xs bg-snap-yellow/10 text-snap-yellow px-2 py-0.5 rounded-full border border-snap-yellow/30 font-medium">Pro</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">Snapchat Contact & Streak Hub</p>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="flex items-center gap-2 sm:gap-3">
+                <button id="openAddModalBtn" class="bg-snap-yellow hover:bg-snap-yellowHover text-black font-semibold text-sm px-4 py-2 rounded-xl transition-all flex items-center gap-2 shadow-md snap-glow-hover active:scale-95">
+                    <i class="fa-solid fa-plus text-xs"></i>
+                    <span class="hidden sm:inline">Add Contact</span>
+                </button>
+                <div class="h-6 w-px bg-slate-800"></div>
+                <button id="exportBtn" title="Export Contacts" class="p-2.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-xl transition-all border border-slate-700/50">
+                    <i class="fa-solid fa-file-export text-xs sm:text-sm"></i>
+                </button>
+                <label id="importLabel" title="Import Contacts" class="p-2.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-xl transition-all border border-slate-700/50 cursor-pointer">
+                    <i class="fa-solid fa-file-import text-xs sm:text-sm"></i>
+                    <input type="file" id="importInput" accept=".json" class="hidden" />
+                </label>
+                <button id="resetDemoBtn" title="Reset Demo Data" class="p-2.5 bg-slate-800/80 hover:bg-red-500/20 hover:text-red-400 text-slate-400 rounded-xl transition-all border border-slate-700/50">
+                    <i class="fa-solid fa-rotate-right text-xs sm:text-sm"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+
+        <!-- Analytics Overview Cards -->
+        <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <!-- Total Contacts -->
+            <div class="glass-panel p-4 rounded-2xl relative overflow-hidden group border border-slate-800">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Users</span>
+                    <div class="p-2 rounded-xl bg-blue-500/10 text-blue-400">
+                        <i class="fa-solid fa-users text-sm"></i>
+                    </div>
+                </div>
+                <div class="mt-2 flex items-baseline gap-2">
+                    <span id="statTotalUsers" class="text-2xl sm:text-3xl font-bold">0</span>
+                    <span class="text-xs text-slate-500">logged</span>
+                </div>
+                <div class="absolute inset-x-0 bottom-0 h-0.5 bg-blue-500/40 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            </div>
+
+            <!-- Active Streaks -->
+            <div class="glass-panel p-4 rounded-2xl relative overflow-hidden group border border-slate-800">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Active Streaks</span>
+                    <div class="p-2 rounded-xl bg-orange-500/10 text-orange-400">
+                        <i class="fa-solid fa-fire text-sm"></i>
+                    </div>
+                </div>
+                <div class="mt-2 flex items-baseline gap-2">
+                    <span id="statActiveStreaks" class="text-2xl sm:text-3xl font-bold text-orange-400">0</span>
+                    <span id="statStreakAvg" class="text-xs text-slate-400">avg 0d</span>
+                </div>
+                <div class="absolute inset-x-0 bottom-0 h-0.5 bg-orange-500/40 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            </div>
+
+            <!-- Highest Streak -->
+            <div class="glass-panel p-4 rounded-2xl relative overflow-hidden group border border-slate-800">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Highest Streak</span>
+                    <div class="p-2 rounded-xl bg-snap-yellow/10 text-snap-yellow">
+                        <i class="fa-solid fa-trophy text-sm"></i>
+                    </div>
+                </div>
+                <div class="mt-2 flex items-baseline gap-2">
+                    <span id="statMaxStreak" class="text-2xl sm:text-3xl font-bold text-snap-yellow">0</span>
+                    <span id="statMaxUser" class="text-xs text-slate-400 truncate max-w-[100px]">-</span>
+                </div>
+                <div class="absolute inset-x-0 bottom-0 h-0.5 bg-snap-yellow/40 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            </div>
+
+            <!-- Best Friends Count -->
+            <div class="glass-panel p-4 rounded-2xl relative overflow-hidden group border border-slate-800">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Best Friends</span>
+                    <div class="p-2 rounded-xl bg-pink-500/10 text-pink-400">
+                        <i class="fa-solid fa-star text-sm"></i>
+                    </div>
+                </div>
+                <div class="mt-2 flex items-baseline gap-2">
+                    <span id="statBestFriends" class="text-2xl sm:text-3xl font-bold text-pink-400">0</span>
+                    <span class="text-xs text-slate-500">⭐ pinned</span>
+                </div>
+                <div class="absolute inset-x-0 bottom-0 h-0.5 bg-pink-500/40 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            </div>
+        </section>
+
+        <!-- Controls: Search, Filter, Sort & View Mode -->
+        <section class="glass-panel p-4 rounded-2xl border border-slate-800/80 space-y-4">
+            <div class="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
+                
+                <!-- Search Input -->
+                <div class="relative flex-1">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                    <input type="text" id="searchInput" placeholder="Search display name, @username, or notes..." 
+                        class="w-full bg-slate-900/90 border border-slate-700/60 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-snap-yellow/80 transition-all">
+                </div>
+
+                <div class="flex flex-wrap sm:flex-nowrap items-center gap-2.5">
+                    <!-- Category/Tag Filter -->
+                    <select id="tagFilter" class="bg-slate-900/90 border border-slate-700/60 text-slate-300 text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-snap-yellow/80 transition-all">
+                        <option value="ALL">All Categories</option>
+                        <option value="Best Friends">⭐ Best Friends</option>
+                        <option value="Active Streaks">🔥 Active Streaks</option>
+                        <option value="Expiring">⚠️ Expiring Soon</option>
+                        <option value="School">School</option>
+                        <option value="Work">Work</option>
+                        <option value="Close Friends">Close Friends</option>
+                    </select>
+
+                    <!-- Sorting -->
+                    <select id="sortSelect" class="bg-slate-900/90 border border-slate-700/60 text-slate-300 text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-snap-yellow/80 transition-all">
+                        <option value="streak-desc">🔥 Highest Streak</option>
+                        <option value="streak-asc">🔥 Lowest Streak</option>
+                        <option value="name-asc">Name (A-Z)</option>
+                        <option value="name-desc">Name (Z-A)</option>
+                        <option value="last-contact">Last Contacted</option>
+                        <option value="date-added">Recently Added</option>
+                    </select>
+
+                    <!-- View Switcher -->
+                    <div class="flex bg-slate-900/90 p-1 rounded-xl border border-slate-700/60">
+                        <button id="gridViewBtn" class="p-2 rounded-lg text-snap-yellow bg-slate-800 transition-all" title="Grid View">
+                            <i class="fa-solid fa-grip-vertical text-sm"></i>
+                        </button>
+                        <button id="listViewBtn" class="p-2 rounded-lg text-slate-400 hover:text-slate-200 transition-all" title="List View">
+                            <i class="fa-solid fa-list text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Directory Container -->
+        <section id="directoryContainer">
+            <!-- Dynamic Content (Grid or List rendered via JS) -->
+        </section>
+
+    </main>
+
+    <!-- Quick Add / Edit Modal -->
+    <div id="contactModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+        <div class="glass-panel bg-snap-darkBg border border-slate-700/80 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl transition-all transform scale-95 opacity-0 duration-200" id="modalCard">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+                <h3 id="modalTitle" class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-user-plus text-snap-yellow"></i> Add Snapchat Contact
+                </h3>
+                <button id="closeModalBtn" class="text-slate-400 hover:text-white p-1 rounded-lg transition-colors">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Form -->
+            <form id="contactForm" class="p-6 space-y-4">
+                <input type="hidden" id="contactId">
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Display Name -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase mb-1">Display Name *</label>
+                        <input type="text" id="displayName" required placeholder="e.g. Alex Rivera" 
+                            class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-snap-yellow">
+                    </div>
+
+                    <!-- Snapchat Username -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase mb-1">Snapchat Username *</label>
+                        <div class="relative">
+                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">@</span>
+                            <input type="text" id="username" required placeholder="alex_snap23" 
+                                class="w-full bg-slate-900/90 border border-slate-700 rounded-xl pl-8 pr-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-snap-yellow">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Streak Count -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase mb-1">Streak Count 🔥</label>
+                        <input type="number" id="streakCount" min="0" value="0" 
+                            class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-snap-yellow">
+                    </div>
+
+                    <!-- Category / Tag -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase mb-1">Category / Tag</label>
+                        <select id="categoryTag" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-snap-yellow">
+                            <option value="Close Friends">Close Friends</option>
+                            <option value="School">School</option>
+                            <option value="Work">Work</option>
+                            <option value="Gaming">Gaming</option>
+                            <option value="General">General</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Avatar Color / Style Picker -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase mb-1">Avatar Theme Color</label>
+                    <div class="flex items-center gap-3" id="colorPickerContainer">
+                        <!-- Dynamic Color Radios -->
+                    </div>
+                </div>
+
+                <!-- Best Friend Checkbox & SnapScore -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                    <div class="flex items-center gap-2.5 pt-2">
+                        <input type="checkbox" id="isBestFriend" class="w-4 h-4 accent-snap-yellow rounded cursor-pointer">
+                        <label for="isBestFriend" class="text-sm font-medium text-slate-300 cursor-pointer flex items-center gap-1.5">
+                            ⭐ Best Friend Status
+                        </label>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase mb-1">Snapscore (Optional)</label>
+                        <input type="number" id="snapScore" placeholder="e.g. 45200" 
+                            class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3.5 py-1.5 text-sm text-slate-100 focus:outline-none focus:border-snap-yellow">
+                    </div>
+                </div>
+
+                <!-- Profile Link -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase mb-1">Snapcode / Profile URL</label>
+                    <input type="url" id="profileUrl" placeholder="https://snapchat.com/add/username" 
+                        class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-snap-yellow">
+                </div>
+
+                <!-- Notes -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase mb-1">Notes / Memories</label>
+                    <textarea id="notes" rows="2" placeholder="Birthday, inside jokes, last met at..." 
+                        class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-snap-yellow resize-none"></textarea>
+                </div>
+
+                <!-- Buttons -->
+                <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                    <button type="button" id="cancelModalBtn" class="px-4 py-2 rounded-xl text-slate-400 hover:text-white text-sm font-medium transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="bg-snap-yellow hover:bg-snap-yellowHover text-black font-semibold text-sm px-5 py-2 rounded-xl transition-all shadow-md">
+                        Save User
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        // Sample Initial Data
+        const SAMPLE_CONTACTS = [
+            {
+                id: '1',
+                displayName: 'Sarah Jenkins',
+                username: 'sarah_j22',
+                streakCount: 142,
+                lastContacted: new Date(Date.now() - 3600000 * 4).toISOString(), // 4 hours ago
+                isBestFriend: true,
+                category: 'Close Friends',
+                avatarColor: '#FFFC00',
+                snapScore: 124500,
+                profileUrl: 'https://snapchat.com/add/sarah_j22',
+                notes: 'Met at college orientation. Loves photography.',
+                dateAdded: new Date(Date.now() - 86400000 * 30).toISOString()
+            },
+            {
+                id: '2',
+                displayName: 'Marcus Vance',
+                username: 'mvance_official',
+                streakCount: 88,
+                lastContacted: new Date(Date.now() - 3600000 * 22).toISOString(), // 22 hours ago (Expiring soon warning!)
+                isBestFriend: true,
+                category: 'Gaming',
+                avatarColor: '#9900F0',
+                snapScore: 89100,
+                profileUrl: 'https://snapchat.com/add/mvance_official',
+                notes: 'Valorant teammate. Send daily snaps before midnight!',
+                dateAdded: new Date(Date.now() - 86400000 * 15).toISOString()
+            },
+            {
+                id: '3',
+                displayName: 'Emma Watson',
+                username: 'emma_w_snaps',
+                streakCount: 0,
+                lastContacted: new Date(Date.now() - 86400000 * 5).toISOString(),
+                isBestFriend: false,
+                category: 'School',
+                avatarColor: '#00D95A',
+                snapScore: 34200,
+                profileUrl: '',
+                notes: 'Biology lab partner.',
+                dateAdded: new Date(Date.now() - 86400000 * 10).toISOString()
+            },
+            {
+                id: '4',
+                displayName: 'David Chen',
+                username: 'dchen_tech',
+                streakCount: 310,
+                lastContacted: new Date(Date.now() - 3600000 * 2).toISOString(),
+                isBestFriend: true,
+                category: 'Work',
+                avatarColor: '#3B82F6',
+                snapScore: 210000,
+                profileUrl: 'https://snapchat.com/add/dchen_tech',
+                notes: 'Software project manager.',
+                dateAdded: new Date(Date.now() - 86400000 * 60).toISOString()
+            }
+        ];
+
+        // Avatar Color Palette Options
+        const COLOR_PALETTE = ['#FFFC00', '#9900F0', '#00D95A', '#3B82F6', '#EC4899', '#F97316', '#14B8A6'];
+
+        // App State
+        let contacts = [];
+        let viewMode = 'grid'; // 'grid' | 'list'
+        let selectedAvatarColor = COLOR_PALETTE[0];
+
+        // DOM Elements
+        const directoryContainer = document.getElementById('directoryContainer');
+        const searchInput = document.getElementById('searchInput');
+        const tagFilter = document.getElementById('tagFilter');
+        const sortSelect = document.getElementById('sortSelect');
+        const gridViewBtn = document.getElementById('gridViewBtn');
+        const listViewBtn = document.getElementById('listViewBtn');
+
+        // Modal Elements
+        const contactModal = document.getElementById('contactModal');
+        const modalCard = document.getElementById('modalCard');
+        const contactForm = document.getElementById('contactForm');
+        const openAddModalBtn = document.getElementById('openAddModalBtn');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const cancelModalBtn = document.getElementById('cancelModalBtn');
+
+        // Stats Elements
+        const statTotalUsers = document.getElementById('statTotalUsers');
+        const statActiveStreaks = document.getElementById('statActiveStreaks');
+        const statStreakAvg = document.getElementById('statStreakAvg');
+        const statMaxStreak = document.getElementById('statMaxStreak');
+        const statMaxUser = document.getElementById('statMaxUser');
+        const statBestFriends = document.getElementById('statBestFriends');
+
+        // Initialize App
+        window.addEventListener('DOMContentLoaded', () => {
+            loadContacts();
+            setupColorPicker();
+            setupEventListeners();
+            renderDirectory();
+            updateStats();
+        });
+
+        // Load Data from LocalStorage
+        function loadContacts() {
+            const saved = localStorage.getItem('snapdex_contacts');
+            if (saved) {
+                try {
+                    contacts = JSON.parse(saved);
+                } catch (e) {
+                    contacts = [...SAMPLE_CONTACTS];
+                }
+            } else {
+                contacts = [...SAMPLE_CONTACTS];
+                saveContacts();
+            }
+        }
+
+        // Save Data to LocalStorage
+        function saveContacts() {
+            localStorage.setItem('snapdex_contacts', JSON.stringify(contacts));
+            updateStats();
+        }
+
+        // Setup Color Picker Radios
+        function setupColorPicker() {
+            const container = document.getElementById('colorPickerContainer');
+            container.innerHTML = COLOR_PALETTE.map((color, index) => `
+                <button type="button" 
+                    data-color="${color}" 
+                    style="background-color: ${color};" 
+                    class="color-option w-7 h-7 rounded-full border-2 ${index === 0 ? 'border-white scale-110' : 'border-transparent'} hover:scale-105 transition-all">
+                </button>
+            `).join('');
+
+            container.querySelectorAll('.color-option').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    container.querySelectorAll('.color-option').forEach(b => {
+                        b.classList.remove('border-white', 'scale-110');
+                        b.classList.add('border-transparent');
+                    });
+                    btn.classList.remove('border-transparent');
+                    btn.classList.add('border-white', 'scale-110');
+                    selectedAvatarColor = btn.getAttribute('data-color');
+                });
+            });
+        }
+
+        // Setup Event Listeners
+        function setupEventListeners() {
+            // View Switchers
+            gridViewBtn.addEventListener('click', () => {
+                viewMode = 'grid';
+                gridViewBtn.classList.add('text-snap-yellow', 'bg-slate-800');
+                gridViewBtn.classList.remove('text-slate-400');
+                listViewBtn.classList.remove('text-snap-yellow', 'bg-slate-800');
+                listViewBtn.classList.add('text-slate-400');
+                renderDirectory();
+            });
+
+            listViewBtn.addEventListener('click', () => {
+                viewMode = 'list';
+                listViewBtn.classList.add('text-snap-yellow', 'bg-slate-800');
+                listViewBtn.classList.remove('text-slate-400');
+                gridViewBtn.classList.remove('text-snap-yellow', 'bg-slate-800');
+                gridViewBtn.classList.add('text-slate-400');
+                renderDirectory();
+            });
+
+            // Filtering & Sorting
+            searchInput.addEventListener('input', renderDirectory);
+            tagFilter.addEventListener('change', renderDirectory);
+            sortSelect.addEventListener('change', renderDirectory);
+
+            // Modal Controls
+            openAddModalBtn.addEventListener('click', () => openModal());
+            closeModalBtn.addEventListener('click', closeModal);
+            cancelModalBtn.addEventListener('click', closeModal);
+            contactModal.addEventListener('click', (e) => {
+                if (e.target === contactModal) closeModal();
+            });
+
+            // Form Submit
+            contactForm.addEventListener('submit', handleFormSubmit);
+
+            // Export & Import
+            document.getElementById('exportBtn').addEventListener('click', exportContactsJSON);
+            document.getElementById('importInput').addEventListener('change', importContactsJSON);
+            document.getElementById('resetDemoBtn').addEventListener('click', resetDemoData);
+        }
+
+        // Open Modal (Add or Edit)
+        function openModal(contact = null) {
+            document.getElementById('contactId').value = contact ? contact.id : '';
+            document.getElementById('modalTitle').innerHTML = contact ? 
+                `<i class="fa-solid fa-pen-to-square text-snap-yellow"></i> Edit Contact` : 
+                `<i class="fa-solid fa-user-plus text-snap-yellow"></i> Add Snapchat Contact`;
+            
+            document.getElementById('displayName').value = contact ? contact.displayName : '';
+            document.getElementById('username').value = contact ? contact.username : '';
+            document.getElementById('streakCount').value = contact ? contact.streakCount : 0;
+            document.getElementById('categoryTag').value = contact ? contact.category : 'Close Friends';
+            document.getElementById('isBestFriend').checked = contact ? contact.isBestFriend : false;
+            document.getElementById('snapScore').value = contact ? (contact.snapScore || '') : '';
+            document.getElementById('profileUrl').value = contact ? (contact.profileUrl || '') : '';
+            document.getElementById('notes').value = contact ? (contact.notes || '') : '';
+
+            // Color selection
+            selectedAvatarColor = contact ? (contact.avatarColor || COLOR_PALETTE[0]) : COLOR_PALETTE[0];
+            const colorBtns = document.querySelectorAll('.color-option');
+            colorBtns.forEach(btn => {
+                if (btn.getAttribute('data-color') === selectedAvatarColor) {
+                    btn.classList.add('border-white', 'scale-110');
+                    btn.classList.remove('border-transparent');
+                } else {
+                    btn.classList.remove('border-white', 'scale-110');
+                    btn.classList.add('border-transparent');
+                }
+            });
+
+            contactModal.classList.remove('hidden');
+            setTimeout(() => {
+                modalCard.classList.remove('scale-95', 'opacity-0');
+                modalCard.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        // Close Modal
+        function closeModal() {
+            modalCard.classList.remove('scale-100', 'opacity-100');
+            modalCard.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                contactModal.classList.add('hidden');
+                contactForm.reset();
+            }, 200);
+        }
+
+        // Handle Add/Edit Submit
+        function handleFormSubmit(e) {
+            e.preventDefault();
+
+            const id = document.getElementById('contactId').value;
+            const displayName = document.getElementById('displayName').value.trim();
+            const username = document.getElementById('username').value.trim().replace(/^@/, '');
+            const streakCount = parseInt(document.getElementById('streakCount').value) || 0;
+            const category = document.getElementById('categoryTag').value;
+            const isBestFriend = document.getElementById('isBestFriend').checked;
+            const snapScore = parseInt(document.getElementById('snapScore').value) || 0;
+            const profileUrl = document.getElementById('profileUrl').value.trim();
+            const notes = document.getElementById('notes').value.trim();
+
+            if (id) {
+                // Update Existing
+                const index = contacts.findIndex(c => c.id === id);
+                if (index !== -1) {
+                    contacts[index] = {
+                        ...contacts[index],
+                        displayName,
+                        username,
+                        streakCount,
+                        category,
+                        isBestFriend,
+                        snapScore,
+                        profileUrl,
+                        notes,
+                        avatarColor: selectedAvatarColor
+                    };
+                    showToast('Contact updated successfully!');
+                }
+            } else {
+                // Add New
+                const newContact = {
+                    id: Date.now().toString(),
+                    displayName,
+                    username,
+                    streakCount,
+                    category,
+                    isBestFriend,
+                    snapScore,
+                    profileUrl,
+                    notes,
+                    avatarColor: selectedAvatarColor,
+                    lastContacted: new Date().toISOString(),
+                    dateAdded: new Date().toISOString()
+                };
+                contacts.unshift(newContact);
+                showToast(`Added @${username} to contacts!`);
+            }
+
+            saveContacts();
+            renderDirectory();
+            closeModal();
+        }
+
+        // Quick Bump / Log Activity
+        function logSnapActivity(id) {
+            const index = contacts.findIndex(c => c.id === id);
+            if (index !== -1) {
+                contacts[index].streakCount += 1;
+                contacts[index].lastContacted = new Date().toISOString();
+                saveContacts();
+                renderDirectory();
+                showToast(`🔥 Streak bumped with ${contacts[index].displayName}! (${contacts[index].streakCount} Days)`);
+            }
+        }
+
+        // Toggle Best Friend
+        function toggleBestFriend(id) {
+            const index = contacts.findIndex(c => c.id === id);
+            if (index !== -1) {
+                contacts[index].isBestFriend = !contacts[index].isBestFriend;
+                saveContacts();
+                renderDirectory();
+                showToast(contacts[index].isBestFriend ? `⭐ Added to Best Friends` : `Removed from Best Friends`);
+            }
+        }
+
+        // Delete Contact
+        function deleteContact(id) {
+            const contact = contacts.find(c => c.id === id);
+            if (!contact) return;
+
+            if (confirm(`Are you sure you want to delete ${contact.displayName} (@${contact.username})?`)) {
+                contacts = contacts.filter(c => c.id !== id);
+                saveContacts();
+                renderDirectory();
+                showToast(`Deleted ${contact.displayName}`, 'error');
+            }
+        }
+
+        // Get Filtered & Sorted Contacts
+        function getFilteredContacts() {
+            const query = searchInput.value.toLowerCase().trim();
+            const tag = tagFilter.value;
+            const sort = sortSelect.value;
+
+            return contacts.filter(c => {
+                // Search filter
+                const matchesSearch = c.displayName.toLowerCase().includes(query) ||
+                                     c.username.toLowerCase().includes(query) ||
+                                     (c.notes && c.notes.toLowerCase().includes(query));
+
+                // Tag filter
+                let matchesTag = true;
+                if (tag === 'Best Friends') matchesTag = c.isBestFriend;
+                else if (tag === 'Active Streaks') matchesTag = c.streakCount > 0;
+                else if (tag === 'Expiring') matchesTag = isStreakExpiring(c.lastContacted, c.streakCount);
+                else if (tag !== 'ALL') matchesTag = c.category === tag;
+
+                return matchesSearch && matchesTag;
+            }).sort((a, b) => {
+                if (sort === 'streak-desc') return b.streakCount - a.streakCount;
+                if (sort === 'streak-asc') return a.streakCount - b.streakCount;
+                if (sort === 'name-asc') return a.displayName.localeCompare(b.displayName);
+                if (sort === 'name-desc') return b.displayName.localeCompare(a.displayName);
+                if (sort === 'last-contact') return new Date(b.lastContacted) - new Date(a.lastContacted);
+                if (sort === 'date-added') return new Date(b.dateAdded) - new Date(a.dateAdded);
+                return 0;
+            });
+        }
+
+        // Render Directory (Grid or List View)
+        function renderDirectory() {
+            const filtered = getFilteredContacts();
+
+            if (filtered.length === 0) {
+                directoryContainer.innerHTML = `
+                    <div class="glass-panel text-center py-16 px-4 rounded-3xl border border-slate-800">
+                        <div class="w-16 h-16 bg-slate-800/80 text-slate-500 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+                            <i class="fa-solid fa-ghost"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-slate-200">No Contacts Found</h3>
+                        <p class="text-slate-400 text-sm max-w-md mx-auto mt-1">Try adjusting your search query, filters, or add a new Snapchat user to your list.</p>
+                        <button onclick="openModal()" class="mt-5 bg-snap-yellow hover:bg-snap-yellowHover text-black text-sm font-semibold px-4 py-2 rounded-xl transition-all inline-flex items-center gap-2">
+                            <i class="fa-solid fa-plus text-xs"></i> Add Contact
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            if (viewMode === 'grid') {
+                directoryContainer.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4";
+                directoryContainer.innerHTML = filtered.map(c => renderGridCard(c)).join('');
+            } else {
+                directoryContainer.className = "space-y-3";
+                directoryContainer.innerHTML = filtered.map(c => renderListItem(c)).join('');
+            }
+        }
+
+        // Render Individual Grid Card
+        function renderGridCard(c) {
+            const expiring = isStreakExpiring(c.lastContacted, c.streakCount);
+            const initial = c.displayName.charAt(0).toUpperCase();
+
+            return `
+                <div class="glass-panel p-5 rounded-2xl border border-slate-800/80 hover:border-slate-700/80 transition-all flex flex-col justify-between relative group">
+                    <!-- Top Info Header -->
+                    <div>
+                        <div class="flex items-start justify-between gap-3 mb-3">
+                            <div class="flex items-center gap-3">
+                                <!-- Bitmoji / Avatar Placeholder -->
+                                <div class="w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg text-black shadow-md relative" style="background-color: ${c.avatarColor || '#FFFC00'};">
+                                    ${initial}
+                                    ${c.isBestFriend ? `<span class="absolute -top-1 -right-1 text-xs bg-black/80 p-0.5 rounded-full" title="Best Friend">⭐</span>` : ''}
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-slate-100 flex items-center gap-1.5 leading-snug">
+                                        ${escapeHtml(c.displayName)}
+                                    </h4>
+                                    <p class="text-xs text-slate-400">@${escapeHtml(c.username)}</p>
+                                </div>
+                            </div>
+
+                            <!-- Streak Badge -->
+                            <div class="text-right flex flex-col items-end">
+                                ${c.streakCount > 0 ? `
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${expiring ? 'bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse' : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'}">
+                                        <i class="fa-solid fa-fire"></i> ${c.streakCount}
+                                    </span>
+                                ` : `
+                                    <span class="text-xs text-slate-500 bg-slate-800/60 px-2 py-0.5 rounded-full">No streak</span>
+                                `}
+                            </div>
+                        </div>
+
+                        <!-- Tag & Last Contacted -->
+                        <div class="flex flex-wrap items-center gap-2 mb-3">
+                            <span class="text-[11px] bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-lg border border-slate-700/50">
+                                ${escapeHtml(c.category || 'General')}
+                            </span>
+                            <span class="text-[11px] text-slate-400 flex items-center gap-1">
+                                <i class="fa-regular fa-clock text-[10px]"></i> ${formatRelativeTime(c.lastContacted)}
+                            </span>
+                            ${c.snapScore ? `
+                                <span class="text-[11px] text-slate-400 flex items-center gap-1">
+                                    <i class="fa-solid fa-ghost text-[10px]"></i> ${c.snapScore.toLocaleString()}
+                                </span>
+                            ` : ''}
+                        </div>
+
+                        <!-- Notes Preview -->
+                        ${c.notes ? `
+                            <p class="text-xs text-slate-400 line-clamp-2 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80 mb-4">
+                                "${escapeHtml(c.notes)}"
+                            </p>
+                        ` : '<div class="mb-4"></div>'}
+                    </div>
+
+                    <!-- Actions Footer -->
+                    <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                        <!-- Send Snap / Log Activity -->
+                        <button onclick="logSnapActivity('${c.id}')" class="flex-1 bg-slate-800 hover:bg-snap-yellow hover:text-black text-slate-200 text-xs font-semibold py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-paper-plane"></i> Log Snap
+                        </button>
+
+                        <div class="flex items-center gap-1">
+                            <!-- Favorite / Best Friend -->
+                            <button onclick="toggleBestFriend('${c.id}')" class="p-2 text-slate-400 hover:text-pink-400 rounded-lg hover:bg-slate-800 transition-colors" title="Toggle Best Friend">
+                                <i class="fa-${c.isBestFriend ? 'solid text-pink-400' : 'regular'} fa-star text-xs"></i>
+                            </button>
+
+                            <!-- Profile Link -->
+                            ${c.profileUrl ? `
+                                <a href="${escapeHtml(c.profileUrl)}" target="_blank" rel="noopener noreferrer" class="p-2 text-slate-400 hover:text-snap-yellow rounded-lg hover:bg-slate-800 transition-colors" title="Open Snapchat Profile">
+                                    <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
+                                </a>
+                            ` : ''}
+
+                            <!-- Edit -->
+                            <button onclick='openModal(${JSON.stringify(c).replace(/'/g, "&apos;")})' class="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors" title="Edit">
+                                <i class="fa-solid fa-pen text-xs"></i>
+                            </button>
+
+                            <!-- Delete -->
+                            <button onclick="deleteContact('${c.id}')" class="p-2 text-slate-400 hover:text-red-400 rounded-lg hover:bg-slate-800 transition-colors" title="Delete">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Render Individual List Item
+        function renderListItem(c) {
+            const expiring = isStreakExpiring(c.lastContacted, c.streakCount);
+            const initial = c.displayName.charAt(0).toUpperCase();
+
+            return `
+                <div class="glass-panel p-3.5 rounded-2xl border border-slate-800/80 hover:border-slate-700/80 transition-all flex items-center justify-between gap-4">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-black shrink-0 relative" style="background-color: ${c.avatarColor || '#FFFC00'};">
+                            ${initial}
+                            ${c.isBestFriend ? `<span class="absolute -top-1 -right-1 text-[10px] bg-black/80 p-0.5 rounded-full">⭐</span>` : ''}
+                        </div>
+
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2">
+                                <h4 class="font-bold text-slate-100 text-sm truncate">${escapeHtml(c.displayName)}</h4>
+                                <span class="text-xs text-slate-400 truncate">@${escapeHtml(c.username)}</span>
+                            </div>
+                            <div class="flex items-center gap-2 text-xs text-slate-400">
+                                <span>${escapeHtml(c.category)}</span>
+                                <span>•</span>
+                                <span>${formatRelativeTime(c.lastContacted)}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Side Controls -->
+                    <div class="flex items-center gap-3 shrink-0">
+                        <!-- Streak -->
+                        ${c.streakCount > 0 ? `
+                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${expiring ? 'bg-red-500/20 text-red-400 border border-red-500/40' : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'}">
+                                <i class="fa-solid fa-fire text-xs"></i> ${c.streakCount}
+                            </span>
+                        ` : ''}
+
+                        <!-- Quick Log -->
+                        <button onclick="logSnapActivity('${c.id}')" class="bg-slate-800 hover:bg-snap-yellow hover:text-black text-slate-200 text-xs font-medium px-3 py-1.5 rounded-xl transition-all flex items-center gap-1">
+                            <i class="fa-solid fa-paper-plane text-[10px]"></i> Log
+                        </button>
+
+                        <!-- Actions -->
+                        <div class="flex items-center gap-1">
+                            <button onclick='openModal(${JSON.stringify(c).replace(/'/g, "&apos;")})' class="p-1.5 text-slate-400 hover:text-white rounded-lg">
+                                <i class="fa-solid fa-pen text-xs"></i>
+                            </button>
+                            <button onclick="deleteContact('${c.id}')" class="p-1.5 text-slate-400 hover:text-red-400 rounded-lg">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Check if streak is expiring (e.g., > 20 hours since last snap)
+        function isStreakExpiring(lastContactedStr, streakCount) {
+            if (!streakCount || streakCount === 0) return false;
+            const diffHours = (new Date() - new Date(lastContactedStr)) / (1000 * 3600);
+            return diffHours >= 20;
+        }
+
+        // Format relative time
+        function formatRelativeTime(dateStr) {
+            if (!dateStr) return 'Never';
+            const now = new Date();
+            const past = new Date(dateStr);
+            const diffMs = now - past;
+            const diffMins = Math.floor(diffMs / (1000 * 60));
+            const diffHours = Math.floor(diffMs / (1000 * 3600));
+            const diffDays = Math.floor(diffMs / (1000 * 3600 * 24));
+
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            return `${diffDays}d ago`;
+        }
+
+        // Update Counter Stats Cards
+        function updateStats() {
+            statTotalUsers.textContent = contacts.length;
+
+            const activeStreaks = contacts.filter(c => c.streakCount > 0);
+            statActiveStreaks.textContent = activeStreaks.length;
+
+            const avgStreak = activeStreaks.length > 0 
+                ? Math.round(activeStreaks.reduce((acc, c) => acc + c.streakCount, 0) / activeStreaks.length) 
+                : 0;
+            statStreakAvg.textContent = `avg ${avgStreak}d`;
+
+            const maxStreakContact = contacts.reduce((max, c) => (c.streakCount > (max?.streakCount || 0) ? c : max), null);
+            statMaxStreak.textContent = maxStreakContact ? maxStreakContact.streakCount : 0;
+            statMaxUser.textContent = maxStreakContact ? `@${maxStreakContact.username}` : '-';
+
+            const bestFriends = contacts.filter(c => c.isBestFriend);
+            statBestFriends.textContent = bestFriends.length;
+        }
+
+        // Export Contacts to JSON
+        function exportContactsJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(contacts, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `snapdex_backup_${new Date().toISOString().slice(0,10)}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            showToast('Exported contacts to JSON file!');
+        }
+
+        // Import Contacts from JSON
+        function importContactsJSON(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const imported = JSON.parse(event.target.result);
+                    if (Array.isArray(imported)) {
+                        contacts = imported;
+                        saveContacts();
+                        renderDirectory();
+                        showToast(`Successfully imported ${imported.length} contacts!`);
+                    } else {
+                        showToast('Invalid JSON file format', 'error');
+                    }
+                } catch (err) {
+                    showToast('Failed to parse JSON file', 'error');
+                }
+            };
+            reader.readAsText(file);
+            e.target.value = ''; // Reset input
+        }
+
+        // Reset Demo Data
+        function resetDemoData() {
+            if (confirm('Reset to initial demo contacts? This will overwrite current entries.')) {
+                contacts = [...SAMPLE_CONTACTS];
+                saveContacts();
+                renderDirectory();
+                showToast('Reset to demo contacts');
+            }
+        }
+
+        // Toast Notification System
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            
+            const isError = type === 'error';
+            toast.className = `pointer-events-auto flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-semibold text-white shadow-xl transition-all transform translate-y-2 opacity-0 ${
+                isError ? 'bg-red-600/90 border border-red-500' : 'bg-slate-800/95 border border-snap-yellow/50 text-snap-yellow'
+            }`;
+
+            toast.innerHTML = `
+                <i class="fa-solid ${isError ? 'fa-triangle-exclamation' : 'fa-circle-check'} text-sm"></i>
+                <span class="text-slate-100">${escapeHtml(message)}</span>
+            `;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 200);
+            }, 3000);
+        }
+
+        // HTML Sanitizer
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>"']/g, function(m) {
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                }[m];
+            });
+        }
+    </script>
+</body>
+</html>
