@@ -203,7 +203,14 @@
                         
                         <!-- Dynamic Background Filter FX Layer -->
                         <div id="cam-bg-gradient" class="absolute inset-0 bg-gradient-to-br from-indigo-950 via-purple-950 to-vault-900 transition-all duration-300"></div>
+                        <!-- Live Camera Feed (mirrored like a selfie camera) -->
+                        <video id="cam-video" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover hidden" style="transform: scaleX(-1);"></video>
                         <div id="cam-fx-overlay" class="absolute inset-0 pointer-events-none transition-all duration-300"></div>
+
+                        <!-- Camera Permission Prompt -->
+                        <button id="cam-enable-btn" onclick="startCamera()" class="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 bg-black/75 backdrop-blur-md border border-amber-500/40 text-amber-300 px-4 py-2 rounded-xl text-xs font-semibold shadow-xl hidden">
+                            <i class="fa-solid fa-video mr-1"></i> Turn on camera
+                        </button>
 
                         <!-- Camera Grid Lines -->
                         <div id="cam-grid" class="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none opacity-0 transition-opacity duration-300">
@@ -1036,24 +1043,184 @@
             document.getElementById('cam-grid').style.opacity = appState.gridActive ? '1' : '0';
         }
 
+        // --- Live camera ---
+        let camStream = null;
+
+        async function startCamera() {
+            const video = document.getElementById('cam-video');
+            const btn = document.getElementById('cam-enable-btn');
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                btn.classList.add('hidden');
+                showToast('Camera Unavailable', 'This browser can only use the camera on https:// or localhost.');
+                return;
+            }
+            try {
+                camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1080 }, height: { ideal: 1920 } }, audio: false });
+                video.srcObject = camStream;
+                video.classList.remove('hidden');
+                btn.classList.add('hidden');
+                // Keep the palette as a soft tint over the live feed
+                const bg = document.getElementById('cam-bg-gradient');
+                bg.style.zIndex = '1';
+                bg.style.opacity = '0.35';
+                bg.style.mixBlendMode = 'soft-light';
+            } catch (err) {
+                btn.classList.remove('hidden');
+                const msg = err.name === 'NotAllowedError' ? 'Camera access was blocked. Allow it in the browser and tap "Turn on camera".'
+                          : err.name === 'NotFoundError' ? 'No camera was found on this device.'
+                          : 'Could not start the camera: ' + err.message;
+                showToast('Camera Off', msg);
+            }
+        }
+
+        function wrapCanvasText(ctx, text, maxWidth) {
+            const words = text.split(' ');
+            const lines = [];
+            let line = '';
+            for (const w of words) {
+                const test = line ? line + ' ' + w : w;
+                if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = w; }
+                else line = test;
+            }
+            if (line) lines.push(line);
+            return lines;
+        }
+
+        function drawPill(ctx, text, x, y, align, font, fg, bg) {
+            ctx.font = font;
+            const padX = 28, h = 64;
+            const w = ctx.measureText(text).width + padX * 2;
+            const left = align === 'right' ? x - w : align === 'center' ? x - w / 2 : x;
+            ctx.fillStyle = bg;
+            ctx.beginPath();
+            ctx.roundRect(left, y, w, h, 24);
+            ctx.fill();
+            ctx.fillStyle = fg;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, left + padX, y + h / 2);
+        }
+
+        function renderCaptureCanvas() {
+            const W = 1080, H = 1920;
+            const canvas = document.createElement('canvas');
+            canvas.width = W; canvas.height = H;
+            const ctx = canvas.getContext('2d');
+            const video = document.getElementById('cam-video');
+            const live = camStream && video.videoWidth;
+
+            // Palette gradient colours, read from the on-screen layer
+            const bgCss = getComputedStyle(document.getElementById('cam-bg-gradient')).backgroundImage;
+            const stops = bgCss.match(/rgba?\([^)]+\)/g) || ['#1e1b4b', '#3b0764', '#0b0b12'];
+            const grad = ctx.createLinearGradient(0, 0, W, H);
+            stops.forEach((c, i) => grad.addColorStop(stops.length > 1 ? i / (stops.length - 1) : 0, c));
+
+            if (live) {
+                // Cover-crop the camera frame to 9:16 and mirror it to match the preview
+                const vw = video.videoWidth, vh = video.videoHeight;
+                const scale = Math.max(W / vw, H / vh);
+                const dw = vw * scale, dh = vh * scale;
+                ctx.save();
+                ctx.translate(W, 0);
+                ctx.scale(-1, 1);
+                ctx.drawImage(video, (W - dw) / 2, (H - dh) / 2, dw, dh);
+                ctx.restore();
+                ctx.globalAlpha = 0.35;
+                ctx.globalCompositeOperation = 'soft-light';
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, W, H);
+                ctx.globalAlpha = 1;
+                ctx.globalCompositeOperation = 'source-over';
+            } else {
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, W, H);
+            }
+
+            // Grid
+            if (appState.gridActive) {
+                ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                ctx.lineWidth = 2;
+                for (let i = 1; i < 3; i++) {
+                    ctx.beginPath(); ctx.moveTo(W * i / 3, 0); ctx.lineTo(W * i / 3, H); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(0, H * i / 3); ctx.lineTo(W, H * i / 3); ctx.stroke();
+                }
+            }
+
+            const font = (wt, px) => `${wt} ${px}px Inter, system-ui, sans-serif`;
+            const activeFilter = AR_FILTERS.find(f => f.id === appState.activeFilterId);
+            const intensity = appState.filterIntensity / 100;
+
+            // Top tags
+            const palette = document.getElementById('ar-palette-tag').innerText;
+            const joke = document.getElementById('ar-joke-tag').innerText;
+            drawPill(ctx, palette, 60, 90, 'left', font(600, 30), '#fcd34d', 'rgba(245,158,11,0.25)');
+            if (joke.trim()) drawPill(ctx, joke, W - 60, 90, 'right', font(500, 32), '#ffffff', 'rgba(0,0,0,0.6)');
+
+            // Filter graphic
+            ctx.globalAlpha = intensity;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.font = font(400, 260);
+            ctx.shadowColor = activeFilter.meshColor;
+            ctx.shadowBlur = 50;
+            ctx.fillText(activeFilter.icon, W / 2, H * 0.42);
+            ctx.shadowBlur = 0;
+            ctx.globalAlpha = 1;
+
+            // Bottom caption
+            const caption = document.getElementById('ar-caption-display').innerText;
+            ctx.font = font(600, 44);
+            const lines = wrapCanvasText(ctx, caption, W - 240).slice(0, 3);
+            const lineH = 60, boxH = lines.length * lineH + 50;
+            const boxW = Math.max(...lines.map(l => ctx.measureText(l).width)) + 80;
+            const boxY = H - 140 - boxH;
+            ctx.fillStyle = 'rgba(0,0,0,0.75)';
+            ctx.beginPath();
+            ctx.roundRect((W - boxW) / 2, boxY, boxW, boxH, 32);
+            ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            lines.forEach((l, i) => ctx.fillText(l, W / 2, boxY + 25 + lineH / 2 + i * lineH));
+
+            return canvas;
+        }
+
         function captureArPhoto() {
             const flash = document.getElementById('camera-flash');
             flash.style.opacity = '1';
             setTimeout(() => flash.style.opacity = '0', 150);
 
             const activeFilter = AR_FILTERS.find(f => f.id === appState.activeFilterId);
+            const canvas = renderCaptureCanvas();
+            const pngUrl = canvas.toDataURL('image/png');
+
+            // Download the full-size photo
+            const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+            const link = document.createElement('a');
+            link.href = pngUrl;
+            link.download = `lens-vault-${activeFilter.id}-${stamp}.png`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+            // Keep a small thumbnail in the vault
+            const thumb = document.createElement('canvas');
+            thumb.width = 270; thumb.height = 480;
+            thumb.getContext('2d').drawImage(canvas, 0, 0, 270, 480);
+
             const newAsset = {
                 id: Date.now(),
                 title: 'Capture: ' + activeFilter.name,
                 type: 'media',
                 desc: 'Captured with intensity ' + appState.filterIntensity + '% and caption: ' + document.getElementById('custom-caption-input').value,
                 date: 'Just now',
-                size: '12.8 MB',
-                metrics: 'Private Vault'
+                size: (pngUrl.length * 0.75 / 1048576).toFixed(1) + ' MB',
+                metrics: 'Private Vault',
+                image: thumb.toDataURL('image/jpeg', 0.8)
             };
             appState.vaultAssets.unshift(newAsset);
             renderVaultGrid();
-            showToast('Snapshot Saved', 'AR snapshot saved to Private Vault with metadata.');
+            showToast('Snapshot Saved', camStream ? 'Photo downloaded and saved to your Private Vault.' : 'Camera is off, so this capture has no photo. Tap "Turn on camera".');
         }
 
         function saveCurrentPresetToVault() {
@@ -1097,6 +1264,7 @@
                             </span>
                             <span class="text-xs text-gray-400 font-mono">${item.size}</span>
                         </div>
+                        ${item.image ? `<img src="${item.image}" alt="${item.title}" class="w-full aspect-[9/16] object-cover rounded-xl mb-3 border border-white/10">` : ''}
                         <h3 class="font-bold text-white text-base mb-1 group-hover:text-amber-400 transition">${item.title}</h3>
                         <p class="text-xs text-gray-400 line-clamp-2">${item.desc}</p>
                     </div>
@@ -1321,6 +1489,7 @@
             renderVaultGrid();
             renderStoryDrafts();
             renderBioHub();
+            startCamera();
         };
     </script>
 </body>
