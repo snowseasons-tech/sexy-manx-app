@@ -205,6 +205,7 @@
                         <div id="cam-bg-gradient" class="absolute inset-0 bg-gradient-to-br from-indigo-950 via-purple-950 to-vault-900 transition-all duration-300"></div>
                         <!-- Live Camera Feed (mirrored like a selfie camera) -->
                         <video id="cam-video" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover hidden" style="transform: scaleX(-1);"></video>
+                        <canvas id="ar-canvas" class="absolute inset-0 w-full h-full pointer-events-none" style="z-index: 2;"></canvas>
                         <div id="cam-fx-overlay" class="absolute inset-0 pointer-events-none transition-all duration-300"></div>
 
                         <!-- Camera Permission Prompt -->
@@ -297,7 +298,8 @@
 
                     <!-- Category Filter Tabs -->
                     <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                        <button onclick="filterCategory('all')" class="cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 text-vault-900 whitespace-nowrap transition">All (12)</button>
+                        <button onclick="filterCategory('all')" class="cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 text-vault-900 whitespace-nowrap transition">All (24)</button>
+                        <button onclick="filterCategory('face')" class="cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-vault-800 text-gray-300 hover:text-white whitespace-nowrap transition">Face Lenses</button>
                         <button onclick="filterCategory('cyber')" class="cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-vault-800 text-gray-300 hover:text-white whitespace-nowrap transition">Sci-Fi & Cyber</button>
                         <button onclick="filterCategory('glow')" class="cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-vault-800 text-gray-300 hover:text-white whitespace-nowrap transition">Aesthetic & Glow</button>
                         <button onclick="filterCategory('retro')" class="cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-vault-800 text-gray-300 hover:text-white whitespace-nowrap transition">Retro & Film</button>
@@ -749,7 +751,330 @@
 
     <!-- APPLICATION LOGIC SCRIPT -->
     <script>
-        // Comprehensive 12 Filter Suite Definition
+        // --- Face-tracked lenses: drawing helpers ---
+        // Each face lens draws in face-local coordinates: x runs along the eye line, y runs down the face,
+        // and every size is a fraction of the face width (f.w) so lenses scale with distance from the camera.
+        function lensLocal(ctx, p, angle, fn) {
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(angle);
+            fn();
+            ctx.restore();
+        }
+
+        function lensEllipse(ctx, x, y, rx, ry, fill, rot = 0) {
+            ctx.beginPath();
+            ctx.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2);
+            ctx.fillStyle = fill;
+            ctx.fill();
+        }
+
+        function lensEmoji(ctx, ch, x, y, size) {
+            ctx.font = `${size}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(ch, x, y);
+        }
+
+        function lensWhiskers(ctx, f, color) {
+            const w = f.w;
+            lensLocal(ctx, f.nose, f.angle, () => {
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 0.008 * w;
+                ctx.lineCap = 'round';
+                [-1, 1].forEach(s => [-0.03, 0.02, 0.07].forEach((dy, i) => {
+                    ctx.beginPath();
+                    ctx.moveTo(s * 0.1 * w, 0.03 * w + dy * 0.5 * w);
+                    ctx.quadraticCurveTo(s * 0.25 * w, dy * w, s * 0.42 * w, (dy - 0.03 + i * 0.03) * w);
+                    ctx.stroke();
+                }));
+            });
+        }
+
+        function faceVisual(icon, label) {
+            return `<div class="text-6xl mb-2">${icon}</div><div class="text-xs font-bold bg-black/70 px-3 py-1 rounded-md text-amber-300 border border-amber-500/30">${label} · show your face</div>`;
+        }
+
+        const FACE_LENSES = [
+            {
+                id: 'puppy', name: 'Puppy Love', icon: '🐶', meshColor: '#b07a4f',
+                grade: 'saturate(1.15) brightness(1.05)',
+                draw(ctx, f) {
+                    const w = f.w;
+                    [-1, 1].forEach(s => lensLocal(ctx, f.at(f.top, s * 0.42 * w, -0.04 * w), f.angle + s * 0.6, () => {
+                        lensEllipse(ctx, 0, 0.14 * w, 0.15 * w, 0.3 * w, '#7a4a24');
+                        lensEllipse(ctx, 0, 0.17 * w, 0.09 * w, 0.21 * w, '#b07a4f');
+                    }));
+                    if (f.mouthOpen > 0.06) lensLocal(ctx, f.mouthBot, f.angle, () => {
+                        const len = 0.12 * w + f.mouthOpen * 1.4 * w;
+                        ctx.fillStyle = '#ff6f91';
+                        ctx.beginPath();
+                        ctx.roundRect(-0.09 * w, -0.02 * w, 0.18 * w, len, [0, 0, 0.09 * w, 0.09 * w]);
+                        ctx.fill();
+                        ctx.strokeStyle = '#e04e75';
+                        ctx.lineWidth = 0.01 * w;
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        ctx.lineTo(0, len * 0.7);
+                        ctx.stroke();
+                    });
+                    lensLocal(ctx, f.nose, f.angle, () => {
+                        lensEllipse(ctx, 0, 0, 0.1 * w, 0.07 * w, '#1a1a1a');
+                        lensEllipse(ctx, -0.03 * w, -0.025 * w, 0.03 * w, 0.015 * w, 'rgba(255,255,255,0.6)');
+                    });
+                }
+            },
+            {
+                id: 'bunny', name: 'Bunny Hop', icon: '🐰', meshColor: '#f9a8c9',
+                grade: 'brightness(1.08) saturate(1.1) contrast(0.95)',
+                draw(ctx, f) {
+                    const w = f.w;
+                    [-1, 1].forEach(s => lensLocal(ctx, f.at(f.top, s * 0.18 * w, -0.04 * w), f.angle + s * 0.18, () => {
+                        lensEllipse(ctx, 0, -0.32 * w, 0.1 * w, 0.36 * w, '#f7f7f7');
+                        lensEllipse(ctx, 0, -0.3 * w, 0.05 * w, 0.27 * w, '#f9a8c9');
+                    }));
+                    if (f.mouthOpen > 0.03) lensLocal(ctx, f.mouthTop, f.angle, () => {
+                        ctx.fillStyle = '#ffffff';
+                        ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+                        ctx.lineWidth = 0.005 * w;
+                        [-1, 1].forEach(s => {
+                            ctx.beginPath();
+                            ctx.roundRect(s > 0 ? 0.004 * w : -0.054 * w, -0.01 * w, 0.05 * w, 0.08 * w, [0, 0, 0.012 * w, 0.012 * w]);
+                            ctx.fill();
+                            ctx.stroke();
+                        });
+                    });
+                    lensWhiskers(ctx, f, 'rgba(60,60,60,0.8)');
+                    lensLocal(ctx, f.nose, f.angle, () => lensEllipse(ctx, 0, 0, 0.05 * w, 0.035 * w, '#ff8fb8'));
+                }
+            },
+            {
+                id: 'kitty', name: 'Kitty Cat', icon: '🐱', meshColor: '#f4a6c0',
+                grade: 'sepia(0.15) saturate(1.2) brightness(1.04)',
+                draw(ctx, f) {
+                    const w = f.w;
+                    [-1, 1].forEach(s => lensLocal(ctx, f.at(f.top, s * 0.32 * w, 0.03 * w), f.angle + s * 0.25, () => {
+                        ctx.fillStyle = '#3b3b3b';
+                        ctx.beginPath();
+                        ctx.moveTo(-0.15 * w, 0); ctx.lineTo(0, -0.32 * w); ctx.lineTo(0.15 * w, 0);
+                        ctx.closePath(); ctx.fill();
+                        ctx.fillStyle = '#f4a6c0';
+                        ctx.beginPath();
+                        ctx.moveTo(-0.08 * w, -0.03 * w); ctx.lineTo(0, -0.22 * w); ctx.lineTo(0.08 * w, -0.03 * w);
+                        ctx.closePath(); ctx.fill();
+                    }));
+                    lensWhiskers(ctx, f, 'rgba(30,30,30,0.85)');
+                    lensLocal(ctx, f.nose, f.angle, () => {
+                        ctx.fillStyle = '#ff7aa8';
+                        ctx.beginPath();
+                        ctx.moveTo(-0.045 * w, -0.02 * w); ctx.lineTo(0.045 * w, -0.02 * w); ctx.lineTo(0, 0.03 * w);
+                        ctx.closePath(); ctx.fill();
+                    });
+                }
+            },
+            {
+                id: 'flowercrown', name: 'Flower Crown', icon: '🌸', meshColor: '#f472b6',
+                grade: 'saturate(1.25) brightness(1.08) contrast(0.95)',
+                draw(ctx, f) {
+                    const w = f.w;
+                    const flowers = ['🌺', '🌼', '🌸', '🌷', '🌸', '🌼', '🌺'];
+                    flowers.forEach((ch, i) => {
+                        const x = (-0.5 + i / 6) * w;
+                        const y = (-0.04 + Math.pow(x / w, 2) * 0.5) * w;
+                        lensLocal(ctx, f.at(f.top, x, y), f.angle + (x / w) * 0.7, () => lensEmoji(ctx, ch, 0, 0, (i % 2 ? 0.17 : 0.21) * w));
+                    });
+                }
+            },
+            {
+                id: 'shades', name: 'Cool Shades', icon: '😎', meshColor: '#38bdf8',
+                grade: 'contrast(1.12) saturate(1.2) hue-rotate(-8deg)',
+                draw(ctx, f) {
+                    const d = f.eyeDist;
+                    lensLocal(ctx, f.eyeMid, f.angle, () => {
+                        ctx.strokeStyle = '#0a0a0a';
+                        ctx.lineWidth = 0.07 * d;
+                        ctx.beginPath();
+                        ctx.moveTo(-1.0 * d, -0.12 * d); ctx.lineTo(-1.2 * d, -0.05 * d);
+                        ctx.moveTo(1.0 * d, -0.12 * d); ctx.lineTo(1.2 * d, -0.05 * d);
+                        ctx.moveTo(-0.08 * d, -0.14 * d); ctx.quadraticCurveTo(0, -0.22 * d, 0.08 * d, -0.14 * d);
+                        ctx.stroke();
+                        [-1, 1].forEach(s => {
+                            const g = ctx.createLinearGradient(0, -0.3 * d, 0, 0.3 * d);
+                            g.addColorStop(0, 'rgba(20,20,30,0.95)');
+                            g.addColorStop(1, 'rgba(60,60,80,0.9)');
+                            ctx.fillStyle = g;
+                            ctx.beginPath();
+                            ctx.roundRect(s * 0.53 * d - 0.45 * d, -0.28 * d, 0.9 * d, 0.56 * d, 0.22 * d);
+                            ctx.fill();
+                            ctx.stroke();
+                            ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+                            ctx.lineWidth = 0.05 * d;
+                            ctx.beginPath();
+                            ctx.moveTo(s * 0.53 * d - 0.25 * d, -0.15 * d);
+                            ctx.lineTo(s * 0.53 * d - 0.05 * d, -0.2 * d);
+                            ctx.stroke();
+                            ctx.strokeStyle = '#0a0a0a';
+                            ctx.lineWidth = 0.07 * d;
+                        });
+                    });
+                }
+            },
+            {
+                id: 'hearteyes', name: 'Heart Eyes', icon: '😍', meshColor: '#fb7185',
+                grade: 'saturate(1.2) brightness(1.06) hue-rotate(-5deg)',
+                draw(ctx, f, t) {
+                    const w = f.w, pulse = 1 + 0.12 * Math.sin(t * 6);
+                    [f.eyeL, f.eyeR].forEach(e => lensLocal(ctx, e, f.angle, () => lensEmoji(ctx, '❤️', 0, 0, 0.85 * f.eyeDist * pulse)));
+                    const base = ctx.globalAlpha;
+                    for (let i = 0; i < 5; i++) {
+                        const phase = (t * 0.5 + i / 5) % 1;
+                        const p = f.at(f.top, (i - 2) * 0.25 * w + Math.sin(t * 2 + i) * 0.05 * w, -0.1 * w - phase * 0.6 * w);
+                        ctx.globalAlpha = base * (1 - phase);
+                        lensLocal(ctx, p, f.angle, () => lensEmoji(ctx, '💕', 0, 0, 0.12 * w));
+                    }
+                    ctx.globalAlpha = base;
+                }
+            },
+            {
+                id: 'devil', name: 'Little Devil', icon: '😈', meshColor: '#ef4444',
+                grade: 'saturate(1.35) contrast(1.1) sepia(0.15) hue-rotate(-15deg)',
+                draw(ctx, f) {
+                    const w = f.w;
+                    [-1, 1].forEach(s => lensLocal(ctx, f.at(f.top, s * 0.25 * w, 0.06 * w), f.angle, () => {
+                        ctx.scale(s, 1);
+                        const g = ctx.createLinearGradient(0, 0, 0.1 * w, -0.3 * w);
+                        g.addColorStop(0, '#8b0000');
+                        g.addColorStop(1, '#ff3b30');
+                        ctx.fillStyle = g;
+                        ctx.beginPath();
+                        ctx.moveTo(-0.07 * w, 0);
+                        ctx.quadraticCurveTo(-0.06 * w, -0.2 * w, 0.12 * w, -0.3 * w);
+                        ctx.quadraticCurveTo(0.02 * w, -0.15 * w, 0.08 * w, 0);
+                        ctx.closePath();
+                        ctx.fill();
+                    }));
+                }
+            },
+            {
+                id: 'angel', name: 'Angel Halo', icon: '😇', meshColor: '#fde68a',
+                grade: 'brightness(1.12) contrast(0.92) saturate(0.85)',
+                draw(ctx, f, t) {
+                    const w = f.w;
+                    lensLocal(ctx, f.at(f.top, 0, -0.2 * w + Math.sin(t * 2) * 0.015 * w), f.angle, () => {
+                        ctx.shadowColor = '#ffd86b';
+                        ctx.shadowBlur = 0.08 * w;
+                        ctx.lineWidth = 0.045 * w;
+                        ctx.strokeStyle = '#ffd34d';
+                        ctx.beginPath();
+                        ctx.ellipse(0, 0, 0.36 * w, 0.085 * w, 0, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.shadowBlur = 0;
+                        ctx.lineWidth = 0.012 * w;
+                        ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+                        ctx.stroke();
+                    });
+                }
+            },
+            {
+                id: 'royal', name: 'Royal Crown', icon: '👑', meshColor: '#fbbf24',
+                grade: 'sepia(0.2) saturate(1.3) contrast(1.05)',
+                draw(ctx, f, t) {
+                    const w = f.w;
+                    lensLocal(ctx, f.at(f.top, 0, -0.16 * w), f.angle, () => {
+                        ctx.shadowColor = '#fbbf24';
+                        ctx.shadowBlur = 0.1 * w;
+                        lensEmoji(ctx, '👑', 0, 0, 0.62 * w);
+                        ctx.shadowBlur = 0;
+                        const base = ctx.globalAlpha;
+                        [-0.3, 0.05, 0.32].forEach((x, i) => {
+                            ctx.globalAlpha = base * (0.5 + 0.5 * Math.sin(t * 4 + i * 2));
+                            lensEmoji(ctx, '✨', x * w, (-0.25 + (i % 2) * 0.08) * w, 0.1 * w);
+                        });
+                        ctx.globalAlpha = base;
+                    });
+                }
+            },
+            {
+                id: 'rosy', name: 'Rosy Glow', icon: '🥰', meshColor: '#f9a8d4',
+                grade: 'saturate(1.1) brightness(1.08) contrast(0.93)',
+                draw(ctx, f) {
+                    const w = f.w;
+                    [f.cheekL, f.cheekR].forEach(c => {
+                        const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, 0.13 * w);
+                        g.addColorStop(0, 'rgba(255,90,140,0.6)');
+                        g.addColorStop(1, 'rgba(255,105,150,0)');
+                        ctx.fillStyle = g;
+                        ctx.beginPath();
+                        ctx.arc(c.x, c.y, 0.13 * w, 0, Math.PI * 2);
+                        ctx.fill();
+                    });
+                    const freckles = [[0.12, -0.1], [0.16, -0.06], [0.2, -0.1], [0.14, -0.02], [0.22, -0.04], [0.18, 0.0]];
+                    lensLocal(ctx, f.nose, f.angle, () => [-1, 1].forEach(s => freckles.forEach(([x, y]) =>
+                        lensEllipse(ctx, s * x * w, y * w, 0.008 * w, 0.008 * w, 'rgba(120,60,30,0.5)'))));
+                    lensLocal(ctx, f.eyeR, f.angle, () => lensEmoji(ctx, '✨', 0.2 * w, -0.12 * w, 0.1 * w));
+                }
+            },
+            {
+                id: 'gentleman', name: 'Gentleman', icon: '🎩', meshColor: '#a16207',
+                grade: 'sepia(0.45) contrast(1.1) brightness(0.98)',
+                draw(ctx, f) {
+                    const w = f.w;
+                    lensLocal(ctx, f.at(f.top, 0, -0.2 * w), f.angle, () => lensEmoji(ctx, '🎩', 0, 0, 0.6 * w));
+                    lensLocal(ctx, f.lip, f.angle, () => {
+                        ctx.fillStyle = '#2b1a10';
+                        [-1, 1].forEach(s => {
+                            ctx.save();
+                            ctx.scale(s, 1);
+                            ctx.beginPath();
+                            ctx.moveTo(0, -0.01 * w);
+                            ctx.bezierCurveTo(0.06 * w, -0.07 * w, 0.18 * w, -0.06 * w, 0.22 * w, 0);
+                            ctx.bezierCurveTo(0.25 * w, 0.05 * w, 0.31 * w, 0.02 * w, 0.3 * w, -0.04 * w);
+                            ctx.bezierCurveTo(0.32 * w, 0.08 * w, 0.18 * w, 0.08 * w, 0.12 * w, 0.04 * w);
+                            ctx.bezierCurveTo(0.08 * w, 0.02 * w, 0.03 * w, 0.04 * w, 0, 0.03 * w);
+                            ctx.closePath();
+                            ctx.fill();
+                            ctx.restore();
+                        });
+                    });
+                }
+            },
+            {
+                id: 'rainbow', name: 'Rainbow Mouth', icon: '🌈', meshColor: '#a78bfa',
+                grade: 'saturate(1.3) brightness(1.05)',
+                draw(ctx, f, t) {
+                    const w = f.w;
+                    if (f.mouthOpen < 0.05) {
+                        lensLocal(ctx, f.at(f.chin, 0, 0.08 * w), f.angle, () => {
+                            ctx.font = `600 ${0.07 * w}px Inter, system-ui, sans-serif`;
+                            ctx.textAlign = 'center';
+                            ctx.fillStyle = 'rgba(255,255,255,0.9)';
+                            ctx.fillText('open your mouth 🌈', 0, 0);
+                        });
+                        return;
+                    }
+                    const colors = ['#ff3b30', '#ff9500', '#ffcc00', '#34c759', '#007aff', '#af52de'];
+                    const mw = Math.min(0.4, f.mouthOpen * 2.2) * w, bw = 1.4 * w, L = 6 * w;
+                    lensLocal(ctx, f.mouth, f.angle, () => {
+                        colors.forEach((c, k) => {
+                            ctx.fillStyle = c;
+                            ctx.beginPath();
+                            ctx.moveTo(-mw / 2 + k * mw / 6, 0);
+                            ctx.lineTo(-mw / 2 + (k + 1) * mw / 6, 0);
+                            ctx.lineTo(-bw / 2 + (k + 1) * bw / 6, L);
+                            ctx.lineTo(-bw / 2 + k * bw / 6, L);
+                            ctx.closePath();
+                            ctx.fill();
+                        });
+                        for (let i = 0; i < 6; i++) {
+                            const phase = (t * 0.8 + i / 6) % 1;
+                            lensEmoji(ctx, '✨', Math.sin(i * 1.7) * 0.4 * w * (0.4 + phase), phase * 1.6 * w, 0.09 * w);
+                        }
+                    });
+                }
+            }
+        ];
+
+        // Filter suite: 12 colour filters plus 12 face-tracked lenses
         const AR_FILTERS = [
             {
                 id: 'crown',
@@ -873,13 +1198,149 @@
             }
         ];
 
+        FACE_LENSES.forEach(l => AR_FILTERS.push({ ...l, category: 'face', visual: faceVisual(l.icon, l.name), meshClass: 'border-white/60', fxClass: '' }));
+
+        // --- Face tracking (MediaPipe Face Landmarker, loaded the first time a face lens is used) ---
+        const MEDIAPIPE_VERSION = '0.10.14';
+        const FACE_MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+        let faceLandmarker = null;
+        let faceTrackerLoading = null;
+        let trackedFaces = [];
+        let lastVideoTime = -1;
+        let faceUiState = null;
+        let faceTrackerCpuOnly = false;
+        let faceTrackerWarned = false;
+
+        function loadFaceTracker() {
+            if (!faceTrackerLoading) {
+                faceTrackerLoading = (async () => {
+                    const probe = document.createElement('canvas');
+                    if (!probe.getContext('webgl2') && !probe.getContext('webgl')) {
+                        throw new Error('this browser has WebGL turned off. Turn on hardware acceleration in its settings and reload.');
+                    }
+                    const base = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}`;
+                    const { FaceLandmarker, FilesetResolver } = await import(base);
+                    const fileset = await FilesetResolver.forVisionTasks(`${base}/wasm`);
+                    const options = delegate => ({ baseOptions: { modelAssetPath: FACE_MODEL_URL, delegate }, runningMode: 'VIDEO', numFaces: 3 });
+                    if (!faceTrackerCpuOnly) {
+                        try {
+                            faceLandmarker = await FaceLandmarker.createFromOptions(fileset, options('GPU'));
+                            return;
+                        } catch (gpuErr) {
+                            faceTrackerCpuOnly = true;
+                        }
+                    }
+                    faceLandmarker = await FaceLandmarker.createFromOptions(fileset, options('CPU'));
+                })().catch(err => {
+                    if (faceTrackerWarned) return;
+                    faceTrackerWarned = true;
+                    showToast('Face Tracking Off', 'Could not load face tracking: ' + err.message);
+                });
+            }
+            return faceTrackerLoading;
+        }
+
+        // Maps normalised landmarks onto a W x H canvas showing the video cover-cropped and mirrored, like the preview
+        function makeFaceMapper(vw, vh, W, H) {
+            const scale = Math.max(W / vw, H / vh);
+            const dw = vw * scale, dh = vh * scale;
+            const ox = (W - dw) / 2, oy = (H - dh) / 2;
+            return lm => ({ x: W - (ox + lm.x * dw), y: oy + lm.y * dh });
+        }
+
+        function buildFace(lm, map) {
+            const P = i => map(lm[i]);
+            const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+            const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+            const byX = (a, b) => (a.x < b.x ? [a, b] : [b, a]);
+            const [eyeL, eyeR] = byX(P(lm.length > 473 ? 468 : 33), P(lm.length > 473 ? 473 : 263));
+            const [cheekL, cheekR] = byX(P(50), P(280));
+            const angle = Math.atan2(eyeR.y - eyeL.y, eyeR.x - eyeL.x);
+            const cos = Math.cos(angle), sin = Math.sin(angle);
+            const w = dist(P(234), P(454));
+            const mouthTop = P(13), mouthBot = P(14);
+            return {
+                w, angle, eyeL, eyeR, cheekL, cheekR, mouthTop, mouthBot,
+                eyeMid: mid(eyeL, eyeR),
+                eyeDist: dist(eyeL, eyeR),
+                top: P(10), nose: P(1), lip: P(164), chin: P(152),
+                mouth: mid(mouthTop, mouthBot),
+                mouthOpen: dist(mouthTop, mouthBot) / w,
+                // Offset a point by (dx, dy) in face-local coordinates
+                at: (p, dx, dy) => ({ x: p.x + dx * cos - dy * sin, y: p.y + dx * sin + dy * cos })
+            };
+        }
+
+        function drawFaceLenses(ctx, lens, faces, vw, vh, W, H, t) {
+            const map = makeFaceMapper(vw, vh, W, H);
+            ctx.save();
+            ctx.globalAlpha = appState.filterIntensity / 100;
+            faces.forEach(lm => lens.draw(ctx, buildFace(lm, map), t));
+            ctx.restore();
+        }
+
+        // Hide the placeholder graphic and fake mesh once a real face is being tracked
+        function setFaceUi(lens, found) {
+            const state = lens.id + ':' + found + ':' + appState.meshVisible;
+            if (state === faceUiState) return;
+            faceUiState = state;
+            const tracking = lens.draw && found;
+            document.getElementById('ar-filter-visual').style.display = tracking ? 'none' : '';
+            document.getElementById('ar-face-mesh').style.display = (tracking || !appState.meshVisible) ? 'none' : 'flex';
+        }
+
+        function arLoop() {
+            requestAnimationFrame(arLoop);
+            const video = document.getElementById('cam-video');
+            const canvas = document.getElementById('ar-canvas');
+            const lens = AR_FILTERS.find(f => f.id === appState.activeFilterId);
+            const dpr = window.devicePixelRatio || 1;
+            const cw = Math.round(canvas.clientWidth * dpr), ch = Math.round(canvas.clientHeight * dpr);
+            if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, cw, ch);
+
+            // Skip tracking while the camera tab is hidden so it doesn't burn CPU/GPU in the background
+            if (!lens.draw || appState.activeTab !== 'camera' || video.readyState < 2 || !video.videoWidth) {
+                trackedFaces = [];
+                setFaceUi(lens, false);
+                return;
+            }
+            if (!faceLandmarker) {
+                loadFaceTracker();
+                setFaceUi(lens, false);
+                return;
+            }
+            if (video.currentTime !== lastVideoTime) {
+                lastVideoTime = video.currentTime;
+                try {
+                    trackedFaces = faceLandmarker.detectForVideo(video, performance.now()).faceLandmarks || [];
+                } catch (err) {
+                    // GPU tracking can fail at detection time when WebGL is unavailable: retry once on the CPU
+                    trackedFaces = [];
+                    if (!faceTrackerCpuOnly) {
+                        faceTrackerCpuOnly = true;
+                        faceLandmarker.close();
+                        faceLandmarker = null;
+                        faceTrackerLoading = null;
+                        loadFaceTracker();
+                    } else if (!faceTrackerWarned) {
+                        faceTrackerWarned = true;
+                        showToast('Face Tracking Off', 'Face tracking failed in this browser: ' + err.message);
+                    }
+                }
+            }
+            setFaceUi(lens, trackedFaces.length > 0);
+            drawFaceLenses(ctx, lens, trackedFaces, video.videoWidth, video.videoHeight, cw, ch, performance.now() / 1000);
+        }
+
         // Application State
         let appState = {
             activeTab: 'camera',
             plannerSubTab: 'stories',
             vaultFilter: 'all',
             activeCategory: 'all',
-            activeFilterId: 'crown',
+            activeFilterId: 'puppy',
             filterIntensity: 85,
             meshVisible: true,
             audioActive: true,
@@ -985,6 +1446,9 @@
 
             const faceMesh = document.getElementById('ar-face-mesh');
             faceMesh.className = `absolute inset-0 border-2 border-dashed ${filterObj.meshClass} rounded-full animate-pulse flex items-center justify-center transition-all duration-300`;
+
+            document.getElementById('cam-video').style.filter = filterObj.grade || '';
+            faceUiState = null;
 
             const fxOverlay = document.getElementById('cam-fx-overlay');
             fxOverlay.className = `absolute inset-0 pointer-events-none transition-all duration-300 ${filterObj.fxClass}`;
@@ -1108,6 +1572,7 @@
             const ctx = canvas.getContext('2d');
             const video = document.getElementById('cam-video');
             const live = camStream && video.videoWidth;
+            const activeFilter = AR_FILTERS.find(f => f.id === appState.activeFilterId);
 
             // Palette gradient colours, read from the on-screen layer
             const bgCss = getComputedStyle(document.getElementById('cam-bg-gradient')).backgroundImage;
@@ -1123,6 +1588,7 @@
                 ctx.save();
                 ctx.translate(W, 0);
                 ctx.scale(-1, 1);
+                ctx.filter = activeFilter.grade || 'none';
                 ctx.drawImage(video, (W - dw) / 2, (H - dh) / 2, dw, dh);
                 ctx.restore();
                 ctx.globalAlpha = 0.35;
@@ -1147,7 +1613,6 @@
             }
 
             const font = (wt, px) => `${wt} ${px}px Inter, system-ui, sans-serif`;
-            const activeFilter = AR_FILTERS.find(f => f.id === appState.activeFilterId);
             const intensity = appState.filterIntensity / 100;
 
             // Top tags
@@ -1156,16 +1621,20 @@
             drawPill(ctx, palette, 60, 90, 'left', font(600, 30), '#fcd34d', 'rgba(245,158,11,0.25)');
             if (joke.trim()) drawPill(ctx, joke, W - 60, 90, 'right', font(500, 32), '#ffffff', 'rgba(0,0,0,0.6)');
 
-            // Filter graphic
-            ctx.globalAlpha = intensity;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.font = font(400, 260);
-            ctx.shadowColor = activeFilter.meshColor;
-            ctx.shadowBlur = 50;
-            ctx.fillText(activeFilter.icon, W / 2, H * 0.42);
-            ctx.shadowBlur = 0;
-            ctx.globalAlpha = 1;
+            // Filter graphic: face-tracked lens when a face is in view, otherwise the centred icon
+            if (live && activeFilter.draw && trackedFaces.length) {
+                drawFaceLenses(ctx, activeFilter, trackedFaces, video.videoWidth, video.videoHeight, W, H, performance.now() / 1000);
+            } else {
+                ctx.globalAlpha = intensity;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.font = font(400, 260);
+                ctx.shadowColor = activeFilter.meshColor;
+                ctx.shadowBlur = 50;
+                ctx.fillText(activeFilter.icon, W / 2, H * 0.42);
+                ctx.shadowBlur = 0;
+                ctx.globalAlpha = 1;
+            }
 
             // Bottom caption
             const caption = document.getElementById('ar-caption-display').innerText;
@@ -1485,11 +1954,12 @@
         // Init App
         window.onload = function() {
             renderFilterLibrary();
-            selectArFilter('crown');
+            selectArFilter('puppy');
             renderVaultGrid();
             renderStoryDrafts();
             renderBioHub();
             startCamera();
+            requestAnimationFrame(arLoop);
         };
     </script>
 </body>
