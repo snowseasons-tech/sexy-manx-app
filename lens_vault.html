@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lens Vault - Creator Studio & Private AR Vault</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        vault: {
+                            900: '#090a0f',
+                            800: '#12141c',
+                            700: '#1a1d28',
+                            600: '#262a38',
+                            500: '#3c4258',
+                        },
+                        amberGlow: {
+                            400: '#fbbf24',
+                            500: '#f59e0b',
+                            600: '#d97706',
+                        },
+                        neonCyan: '#22d3ee',
+                        neonPink: '#f472b6',
+                        matrixGreen: '#22c55e',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #090a0f;
+            color: #f3f4f6;
+            overflow-x: hidden;
+        }
+        .glass-panel {
+            background: rgba(18, 20, 28, 0.75);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-card {
+            background: rgba(26, 29, 40, 0.55);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .glow-amber {
+            box-shadow: 0 0 25px -5px rgba(245, 158, 11, 0.35);
+        }
+        .glow-cyan {
+            box-shadow: 0 0 25px -5px rgba(34, 211, 238, 0.35);
+        }
+        /* Custom Filter FX Layer Visuals */
+        .fx-vhs {
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 4px, 6px 100%;
+        }
+        .fx-matrix {
+            background: radial-gradient(circle, rgba(34, 197, 94, 0.15) 0%, rgba(9, 10, 15, 0.85) 100%);
+        }
+        .fx-thermal {
+            background: linear-gradient(135deg, rgba(0, 38, 255, 0.6) 0%, rgba(255, 0, 128, 0.6) 50%, rgba(255, 238, 0, 0.8) 100%);
+            mix-blend-mode: hard-light;
+        }
+        .fx-popart {
+            background-image: radial-gradient(rgba(0, 0, 0, 0.4) 20%, transparent 20%);
+            background-size: 8px 8px;
+        }
+        .fx-vapor {
+            background: linear-gradient(180deg, rgba(244, 114, 182, 0.2) 0%, rgba(147, 51, 234, 0.3) 60%, rgba(245, 158, 11, 0.4) 100%);
+        }
+        .fx-noir {
+            filter: grayscale(100%) contrast(160%) brightness(90%);
+        }
+        .fx-glitch-punk {
+            animation: glitch-anim 0.3s infinite alternate;
+        }
+        @keyframes glitch-anim {
+            0% { transform: translate(0); }
+            50% { transform: translate(-2px, 1px); }
+            100% { transform: translate(2px, -1px); }
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #090a0f;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #262a38;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3c4258;
+        }
+    </style>
+</head>
+<body class="bg-vault-900 text-gray-100 min-h-screen flex flex-col selection:bg-amber-500 selection:text-black">
+
+    <!-- Top Navigation Header -->
+    <header class="glass-panel sticky top-0 z-50 px-4 lg:px-8 py-3 flex items-center justify-between border-b border-white/10">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 flex items-center justify-center glow-amber">
+                <i class="fa-solid fa-vault text-vault-900 text-lg font-bold"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg tracking-wide text-white flex items-center gap-2">
+                    LENS VAULT <span class="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium">12+ AR FILTERS</span>
+                </h1>
+                <p class="text-xs text-gray-400">Private AR Lens Studio & Creator Hub</p>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="hidden md:flex items-center space-x-1 bg-vault-800/80 p-1.5 rounded-xl border border-white/5">
+            <button onclick="switchTab('camera')" id="nav-camera" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium bg-amber-500 text-vault-900 shadow-md transition flex items-center gap-2">
+                <i class="fa-solid fa-camera text-xs"></i> AR Live Studio
+            </button>
+            <button onclick="switchTab('vault')" id="nav-vault" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-vault-700 transition flex items-center gap-2">
+                <i class="fa-solid fa-lock text-xs"></i> Vault API
+            </button>
+            <button onclick="switchTab('planner')" id="nav-planner" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-vault-700 transition flex items-center gap-2">
+                <i class="fa-solid fa-calendar-days text-xs"></i> Content Hub
+            </button>
+            <button onclick="switchTab('public')" id="nav-public" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-vault-700 transition flex items-center gap-2">
+                <i class="fa-solid fa-globe text-xs"></i> Public Bio & Links
+            </button>
+        </nav>
+
+        <!-- Right Side Creator Status -->
+        <div class="flex items-center space-x-3">
+            <div id="api-status-badge" class="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>API Token Active</span>
+            </div>
+            <button onclick="openTokenModal()" class="px-3 py-2 rounded-xl bg-vault-700 hover:bg-vault-600 text-xs font-medium text-amber-400 border border-amber-500/30 transition flex items-center gap-1.5">
+                <i class="fa-solid fa-key"></i> <span class="hidden sm:inline">API Key</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Mobile Navigation Bar (Bottom) -->
+    <div class="md:hidden fixed bottom-0 left-0 right-0 glass-panel z-50 px-4 py-3 flex justify-around border-t border-white/10">
+        <button onclick="switchTab('camera')" id="mob-camera" class="mob-tab flex flex-col items-center text-amber-400 text-xs font-semibold">
+            <i class="fa-solid fa-camera text-base mb-1"></i> Studio
+        </button>
+        <button onclick="switchTab('vault')" id="mob-vault" class="mob-tab flex flex-col items-center text-gray-400 text-xs">
+            <i class="fa-solid fa-lock text-base mb-1"></i> Vault
+        </button>
+        <button onclick="switchTab('planner')" id="mob-planner" class="mob-tab flex flex-col items-center text-gray-400 text-xs">
+            <i class="fa-solid fa-calendar-days text-base mb-1"></i> Planner
+        </button>
+        <button onclick="switchTab('public')" id="mob-public" class="mob-tab flex flex-col items-center text-gray-400 text-xs">
+            <i class="fa-solid fa-globe text-base mb-1"></i> Bio Link
+        </button>
+    </div>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-8 pb-24 md:pb-12">
+
+        <!-- TAB 1: AR LENS MOBILE LIVE CAMERA SIMULATOR (EXPANDED SUITE) -->
+        <section id="tab-camera" class="tab-content space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Live Camera Viewport Panel (Span 7) -->
+                <div class="lg:col-span-7 glass-panel p-5 rounded-2xl flex flex-col items-center relative overflow-hidden">
+                    <div class="w-full flex items-center justify-between mb-3 z-20">
+                        <div class="flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 text-xs text-white">
+                            <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
+                            <span class="font-bold uppercase tracking-wider text-[11px]">AR Live Camera</span>
+                            <span class="text-gray-400">| 60 FPS</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="toggleFaceMesh()" id="mesh-toggle-btn" class="px-2.5 py-1.5 rounded-lg bg-vault-700 hover:bg-vault-600 border border-white/10 text-xs text-amber-400 transition flex items-center gap-1.5">
+                                <i class="fa-solid fa-face-smile"></i> Mesh: <span id="mesh-status-text">ON</span>
+                            </button>
+                            <button onclick="toggleCameraAudio()" id="cam-audio-btn" class="w-9 h-9 rounded-xl bg-vault-700 hover:bg-vault-600 border border-white/10 flex items-center justify-center text-white transition">
+                                <i class="fa-solid fa-volume-high"></i>
+                            </button>
+                            <button onclick="toggleCamGrid()" id="cam-grid-btn" class="w-9 h-9 rounded-xl bg-vault-700 hover:bg-vault-600 border border-white/10 flex items-center justify-center text-white transition">
+                                <i class="fa-solid fa-border-all"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Main AR Viewport Container -->
+                    <div id="camera-viewport" class="relative w-full max-w-sm aspect-[9/16] bg-vault-800 rounded-2xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center select-none">
+                        
+                        <!-- Dynamic Background Filter FX Layer -->
+                        <div id="cam-bg-gradient" class="absolute inset-0 bg-gradient-to-br from-indigo-950 via-purple-950 to-vault-900 transition-all duration-300"></div>
+                        <div id="cam-fx-overlay" class="absolute inset-0 pointer-events-none transition-all duration-300"></div>
+
+                        <!-- Camera Grid Lines -->
+                        <div id="cam-grid" class="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none opacity-0 transition-opacity duration-300">
+                            <div class="border-r border-b border-white/20"></div>
+                            <div class="border-r border-b border-white/20"></div>
+                            <div class="border-b border-white/20"></div>
+                            <div class="border-r border-b border-white/20"></div>
+                            <div class="border-r border-b border-white/20"></div>
+                            <div class="border-b border-white/20"></div>
+                            <div class="border-r border-white/20"></div>
+                            <div class="border-r border-white/20"></div>
+                            <div></div>
+                        </div>
+
+                        <!-- Interactive AR Face Tracking Overlay -->
+                        <div id="ar-overlay-container" class="absolute inset-0 pointer-events-none flex flex-col justify-between p-5 z-10 transition-opacity duration-300">
+                            
+                            <!-- Top Overlay: Palette Tag & Inside Joke Tag -->
+                            <div class="w-full flex justify-between items-start pt-2">
+                                <div id="ar-palette-tag" class="bg-amber-500/20 backdrop-blur-md border border-amber-500/40 text-amber-300 px-3 py-1 rounded-full text-[11px] font-semibold shadow-md">
+                                    Palette: Cinematic Amber
+                                </div>
+                                <div id="ar-joke-tag" class="bg-black/60 backdrop-blur-md border border-white/20 text-white px-3 py-1 rounded-xl text-xs font-medium shadow-md">
+                                    "Coffee before code"
+                                </div>
+                            </div>
+
+                            <!-- Center Face Tracking Mesh Visualizer -->
+                            <div class="relative w-48 h-56 mx-auto flex items-center justify-center">
+                                <!-- Face Mesh Wireframe Points -->
+                                <div id="ar-face-mesh" class="absolute inset-0 border-2 border-dashed border-amber-400/60 rounded-full animate-pulse flex items-center justify-center transition-all duration-300">
+                                    <div class="w-32 h-32 rounded-full border border-neonCyan/40 animate-ping absolute"></div>
+                                    <div class="w-2 h-2 rounded-full bg-amber-400 absolute top-8 left-12"></div>
+                                    <div class="w-2 h-2 rounded-full bg-amber-400 absolute top-8 right-12"></div>
+                                    <div class="w-2 h-2 rounded-full bg-neonPink absolute bottom-12"></div>
+                                </div>
+
+                                <!-- Dynamic AR Filter FX Graphic -->
+                                <div id="ar-filter-visual" class="text-center z-10 transition-all duration-300">
+                                    <div class="text-6xl mb-2 drop-shadow-[0_0_20px_rgba(245,158,11,0.9)]">👑</div>
+                                    <div class="text-xs font-bold bg-black/70 px-3 py-1 rounded-md text-amber-300 border border-amber-500/30 backdrop-blur-md">Cyber Crown v2</div>
+                                </div>
+                            </div>
+
+                            <!-- Bottom Overlay Caption -->
+                            <div class="w-full text-center pb-2">
+                                <div id="ar-caption-display" class="inline-block bg-black/75 backdrop-blur-md px-4 py-2 rounded-xl text-xs font-semibold text-white border border-white/10 shadow-xl">
+                                    "Building the future one lens at a time ✨"
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Flash Screen Overlay -->
+                        <div id="camera-flash" class="absolute inset-0 bg-white opacity-0 pointer-events-none transition-opacity duration-150 z-30"></div>
+                    </div>
+
+                    <!-- Camera Action Controls -->
+                    <div class="mt-5 flex items-center justify-center gap-6 w-full">
+                        <button onclick="cycleArFilter(-1)" class="w-12 h-12 rounded-full bg-vault-700 hover:bg-vault-600 text-white flex items-center justify-center transition shadow-md hover:scale-105 active:scale-95" title="Previous Filter">
+                            <i class="fa-solid fa-chevron-left text-base"></i>
+                        </button>
+                        <button onclick="captureArPhoto()" class="w-20 h-20 rounded-full bg-gradient-to-tr from-amber-500 via-amber-400 to-amber-300 p-1 shadow-2xl glow-amber hover:scale-105 active:scale-95 transition flex items-center justify-center" title="Capture & Save to Private Vault">
+                            <div class="w-16 h-16 rounded-full bg-vault-900 flex items-center justify-center text-amber-400">
+                                <i class="fa-solid fa-camera text-2xl"></i>
+                            </div>
+                        </button>
+                        <button onclick="cycleArFilter(1)" class="w-12 h-12 rounded-full bg-vault-700 hover:bg-vault-600 text-white flex items-center justify-center transition shadow-md hover:scale-105 active:scale-95" title="Next Filter">
+                            <i class="fa-solid fa-chevron-right text-base"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- AR Studio Suite Controls Panel (Span 5) -->
+                <div class="lg:col-span-5 glass-panel p-5 rounded-2xl flex flex-col justify-between space-y-5">
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i> AR Lens Library
+                            </h3>
+                            <span class="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold" id="active-filter-badge">12 Presets</span>
+                        </div>
+                        <p class="text-xs text-gray-400">Select face-tracking filters, tune depth intensity, and customize captions.</p>
+                    </div>
+
+                    <!-- Category Filter Tabs -->
+                    <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                        <button onclick="filterCategory('all')" class="cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 text-vault-900 whitespace-nowrap transition">All (12)</button>
+                        <button onclick="filterCategory('cyber')" class="cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-vault-800 text-gray-300 hover:text-white whitespace-nowrap transition">Sci-Fi & Cyber</button>
+                        <button onclick="filterCategory('glow')" class="cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-vault-800 text-gray-300 hover:text-white whitespace-nowrap transition">Aesthetic & Glow</button>
+                        <button onclick="filterCategory('retro')" class="cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-vault-800 text-gray-300 hover:text-white whitespace-nowrap transition">Retro & Film</button>
+                        <button onclick="filterCategory('art')" class="cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-vault-800 text-gray-300 hover:text-white whitespace-nowrap transition">Artistic & Fun</button>
+                    </div>
+
+                    <!-- Filter Selection Grid (Scrollable) -->
+                    <div id="filter-grid" class="grid grid-cols-2 gap-2.5 max-h-52 overflow-y-auto pr-1">
+                        <!-- Populated via JS -->
+                    </div>
+
+                    <!-- Intensity Adjustment Slider -->
+                    <div class="glass-card p-3.5 rounded-xl space-y-2 border border-white/5">
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="font-semibold text-gray-300 uppercase tracking-wider">Filter Depth Intensity</span>
+                            <span id="intensity-val" class="font-mono text-amber-400 font-bold">85%</span>
+                        </div>
+                        <input type="range" id="intensity-slider" min="0" max="100" value="85" oninput="updateFilterIntensity(this.value)" class="w-full accent-amber-400 bg-vault-800 h-2 rounded-lg cursor-pointer">
+                    </div>
+
+                    <!-- Quick Palette Switcher -->
+                    <div class="space-y-1.5">
+                        <label class="text-xs font-semibold text-gray-300 uppercase tracking-wider">Color Palette Grading</label>
+                        <div class="grid grid-cols-4 gap-2">
+                            <button onclick="setPalette('amber', 'Cinematic Amber', 'from-amber-950 via-zinc-900 to-vault-900')" class="palette-btn p-2 rounded-xl border border-amber-500/50 bg-amber-500/10 text-xs text-amber-300 font-medium flex flex-col items-center gap-1 transition">
+                                <span class="w-3.5 h-3.5 rounded-full bg-amber-500 inline-block shadow-sm"></span> Amber
+                            </button>
+                            <button onclick="setPalette('cyan', 'Neon Cyan', 'from-cyan-950 via-blue-950 to-vault-900')" class="palette-btn p-2 rounded-xl border border-white/10 bg-vault-800 text-xs text-gray-300 hover:text-white flex flex-col items-center gap-1 transition">
+                                <span class="w-3.5 h-3.5 rounded-full bg-cyan-400 inline-block shadow-sm"></span> Cyan
+                            </button>
+                            <button onclick="setPalette('rose', 'Midnight Rose', 'from-rose-950 via-purple-950 to-vault-900')" class="palette-btn p-2 rounded-xl border border-white/10 bg-vault-800 text-xs text-gray-300 hover:text-white flex flex-col items-center gap-1 transition">
+                                <span class="w-3.5 h-3.5 rounded-full bg-rose-400 inline-block shadow-sm"></span> Rose
+                            </button>
+                            <button onclick="setPalette('vintage', 'Vintage Warm', 'from-orange-950 via-amber-950 to-vault-900')" class="palette-btn p-2 rounded-xl border border-white/10 bg-vault-800 text-xs text-gray-300 hover:text-white flex flex-col items-center gap-1 transition">
+                                <span class="w-3.5 h-3.5 rounded-full bg-orange-400 inline-block shadow-sm"></span> Vintage
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Personal Caption & Inside Joke Inputs -->
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <div>
+                            <label class="text-[11px] font-semibold text-gray-300 uppercase tracking-wider">Caption Text</label>
+                            <input type="text" id="custom-caption-input" value="Building the future one lens at a time ✨" oninput="updateLiveCaption(this.value)" class="w-full bg-vault-800 text-xs rounded-xl px-3 py-2 border border-white/10 focus:outline-none focus:border-amber-500 text-white mt-1">
+                        </div>
+                        <div>
+                            <label class="text-[11px] font-semibold text-gray-300 uppercase tracking-wider">Inside Joke Tag</label>
+                            <input type="text" id="custom-joke-input" value="Coffee before code" oninput="updateLiveJoke(this.value)" class="w-full bg-vault-800 text-xs rounded-xl px-3 py-2 border border-white/10 focus:outline-none focus:border-amber-500 text-white mt-1">
+                        </div>
+                    </div>
+
+                    <button onclick="saveCurrentPresetToVault()" class="w-full py-3 rounded-xl bg-vault-700 hover:bg-vault-600 text-xs font-bold text-amber-400 border border-amber-500/30 transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-bookmark"></i> Save Active AR Preset to Private Vault
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: VAULT API & ASSET MANAGER -->
+        <section id="tab-vault" class="tab-content hidden space-y-6">
+            <div class="glass-panel p-6 rounded-2xl relative overflow-hidden">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                    <div>
+                        <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-shield-halved text-amber-400"></i> Encrypted Private Vault API
+                        </h2>
+                        <p class="text-sm text-gray-400 mt-1">Manage private lens presets, color grading matrices, and captured media assets.</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button onclick="triggerApiSync()" class="px-4 py-2.5 rounded-xl bg-vault-700 hover:bg-vault-600 text-sm font-medium text-white border border-white/10 transition flex items-center gap-2">
+                            <i class="fa-solid fa-rotate" id="sync-icon"></i> Sync Vault API
+                        </button>
+                        <button onclick="openUploadModal()" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-vault-900 font-semibold text-sm transition shadow-lg glow-amber flex items-center gap-2">
+                            <i class="fa-solid fa-cloud-arrow-up"></i> Upload Asset
+                        </button>
+                    </div>
+                </div>
+
+                <!-- API Stats Bar -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                    <div class="glass-card p-4 rounded-xl border border-white/5">
+                        <div class="text-gray-400 text-xs uppercase tracking-wider mb-1">Vault Storage Used</div>
+                        <div class="text-2xl font-bold text-white flex items-baseline gap-2">
+                            <span id="vault-storage-val">1.85 GB</span>
+                            <span class="text-xs text-amber-400 font-normal">of 50 GB Private</span>
+                        </div>
+                        <div class="w-full bg-vault-800 rounded-full h-2 mt-3 overflow-hidden">
+                            <div class="bg-gradient-to-r from-amber-500 to-amber-300 h-2 rounded-full" style="width: 42%"></div>
+                        </div>
+                    </div>
+                    <div class="glass-card p-4 rounded-xl border border-white/5">
+                        <div class="text-gray-400 text-xs uppercase tracking-wider mb-1">Active Lens Presets</div>
+                        <div class="text-2xl font-bold text-white flex items-baseline gap-2">
+                            <span id="vault-preset-count">12</span>
+                            <span class="text-xs text-emerald-400 font-normal">Encrypted & Synced</span>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-2">12 Face-tracking filters ready</p>
+                    </div>
+                    <div class="glass-card p-4 rounded-xl border border-white/5">
+                        <div class="text-gray-400 text-xs uppercase tracking-wider mb-1">API Security Protocol</div>
+                        <div class="text-2xl font-bold text-emerald-400 flex items-center gap-2">
+                            <i class="fa-solid fa-lock text-sm"></i> AES-256 Auth
+                        </div>
+                        <p class="text-xs text-gray-400 mt-2">Zero public third-party access</p>
+                    </div>
+                </div>
+
+                <!-- Search & Filters -->
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+                    <div class="relative w-full sm:w-80">
+                        <i class="fa-solid fa-search absolute left-3.5 top-3.5 text-gray-400 text-sm"></i>
+                        <input type="text" id="vault-search" oninput="filterVaultAssets()" placeholder="Search presets, media, LUTs..." class="w-full bg-vault-800 text-sm rounded-xl pl-10 pr-4 py-3 border border-white/10 focus:outline-none focus:border-amber-500 text-white placeholder-gray-500">
+                    </div>
+                    <div class="flex items-center gap-2 w-full sm:w-auto">
+                        <button onclick="setVaultFilter('all')" class="vault-filter-btn px-3.5 py-2 rounded-lg text-xs font-medium bg-amber-500 text-vault-900 transition flex-1 sm:flex-none">All Assets</button>
+                        <button onclick="setVaultFilter('preset')" class="vault-filter-btn px-3.5 py-2 rounded-lg text-xs font-medium bg-vault-800 text-gray-300 hover:text-white transition flex-1 sm:flex-none">Lens Presets</button>
+                        <button onclick="setVaultFilter('media')" class="vault-filter-btn px-3.5 py-2 rounded-lg text-xs font-medium bg-vault-800 text-gray-300 hover:text-white transition flex-1 sm:flex-none">Captures & LUTs</button>
+                    </div>
+                </div>
+
+                <!-- Vault Asset Grid -->
+                <div id="vault-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- Populated dynamically via JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: CREATOR CONTENT PLANNER & HUB -->
+        <section id="tab-planner" class="tab-content hidden space-y-6">
+            <div class="glass-panel p-6 rounded-2xl relative overflow-hidden">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                    <div>
+                        <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-calendar-check text-amber-400"></i> Creator Content Planner & Hub
+                        </h2>
+                        <p class="text-sm text-gray-400 mt-1">Draft Story ideas, review content performance summaries, and manage Link-in-Bio profile.</p>
+                    </div>
+                    <button onclick="openNewStoryModal()" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-vault-900 font-semibold text-sm transition shadow-lg glow-amber flex items-center gap-2">
+                        <i class="fa-solid fa-plus"></i> New Story Idea Draft
+                    </button>
+                </div>
+
+                <!-- Sub-tabs for Planner -->
+                <div class="flex items-center space-x-2 border-b border-white/10 pb-4 mb-6">
+                    <button onclick="switchPlannerTab('stories')" id="plan-tab-stories" class="planner-sub-btn px-4 py-2 rounded-lg text-xs font-semibold bg-amber-500 text-vault-900 transition">Story Idea Drafts</button>
+                    <button onclick="switchPlannerTab('analytics')" id="plan-tab-analytics" class="planner-sub-btn px-4 py-2 rounded-lg text-xs font-semibold bg-vault-800 text-gray-300 hover:text-white transition">Performance Summaries</button>
+                    <button onclick="switchPlannerTab('bio')" id="plan-tab-bio" class="planner-sub-btn px-4 py-2 rounded-lg text-xs font-semibold bg-vault-800 text-gray-300 hover:text-white transition">Link-in-Bio Editor</button>
+                </div>
+
+                <!-- SUB-VIEW 1: STORY IDEA DRAFTS -->
+                <div id="plan-view-stories" class="planner-section space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="story-drafts-grid">
+                        <!-- Populated via JS -->
+                    </div>
+                </div>
+
+                <!-- SUB-VIEW 2: PERFORMANCE SUMMARIES -->
+                <div id="plan-view-analytics" class="planner-section hidden space-y-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div class="glass-card p-5 rounded-2xl border border-white/5">
+                            <div class="text-gray-400 text-xs uppercase tracking-wider mb-1">Total Vault Views (30D)</div>
+                            <div class="text-3xl font-bold text-white">52.8K</div>
+                            <div class="text-xs text-emerald-400 mt-2 flex items-center gap-1">
+                                <i class="fa-solid fa-arrow-trend-up"><span>+18.2% from last month</span></i>
+                            </div>
+                        </div>
+                        <div class="glass-card p-5 rounded-2xl border border-white/5">
+                            <div class="text-gray-400 text-xs uppercase tracking-wider mb-1">Outbound Bio Clicks</div>
+                            <div class="text-3xl font-bold text-white" id="stat-total-clicks">1,492</div>
+                            <div class="text-xs text-emerald-400 mt-2 flex items-center gap-1">
+                                <i class="fa-solid fa-arrow-trend-up"><span>Tracked safely (0 trackers)</span></i>
+                            </div>
+                        </div>
+                        <div class="glass-card p-5 rounded-2xl border border-white/5">
+                            <div class="text-gray-400 text-xs uppercase tracking-wider mb-1">Top Performing Filter</div>
+                            <div class="text-lg font-bold text-amber-400 truncate mt-1">👑 Cyber Crown / Sci-Fi HUD</div>
+                            <div class="text-xs text-gray-400 mt-1">21.6K preset applications</div>
+                        </div>
+                    </div>
+
+                    <div class="glass-card p-5 rounded-2xl border border-white/5">
+                        <h3 class="text-base font-bold text-white mb-4 flex items-center gap-2">
+                            <i class="fa-solid fa-chart-line text-amber-400"></i> AR Lens Performance & Analytics Breakdown
+                        </h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm text-gray-300">
+                                <thead class="border-b border-white/10 text-xs text-gray-400 uppercase">
+                                    <tr>
+                                        <th class="pb-3">Filter / Asset Title</th>
+                                        <th class="pb-3">Type</th>
+                                        <th class="pb-3">Engagements</th>
+                                        <th class="pb-3">Status</th>
+                                        <th class="pb-3 text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-white/5" id="performance-table-body">
+                                    <!-- Populated via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUB-VIEW 3: LINK-IN-BIO EDITOR -->
+                <div id="plan-view-bio" class="planner-section hidden space-y-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="space-y-4">
+                            <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-pen-to-square text-amber-400"></i> Edit Public Link-in-Bio Profile
+                            </h3>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="text-xs font-semibold text-gray-300 uppercase tracking-wider">Creator Display Name</label>
+                                    <input type="text" id="bio-edit-name" value="Alex Rivera" oninput="updateBioPreview()" class="w-full bg-vault-800 text-sm rounded-xl px-4 py-2.5 border border-white/10 focus:outline-none focus:border-amber-500 text-white mt-1">
+                                </div>
+                                <div>
+                                    <label class="text-xs font-semibold text-gray-300 uppercase tracking-wider">Bio Tagline</label>
+                                    <textarea id="bio-edit-tagline" oninput="updateBioPreview()" rows="2" class="w-full bg-vault-800 text-sm rounded-xl px-4 py-2.5 border border-white/10 focus:outline-none focus:border-amber-500 text-white mt-1">AR Lens Creator & Tech Visualist. Creating 12+ private face-tracking presets.</textarea>
+                                </div>
+                                <div>
+                                    <label class="text-xs font-semibold text-gray-300 uppercase tracking-wider">Avatar URL</label>
+                                    <input type="text" id="bio-edit-avatar" value="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80" oninput="updateBioPreview()" class="w-full bg-vault-800 text-sm rounded-xl px-4 py-2.5 border border-white/10 focus:outline-none focus:border-amber-500 text-white mt-1">
+                                </div>
+                            </div>
+
+                            <div class="pt-4 border-t border-white/10">
+                                <div class="flex justify-between items-center mb-3">
+                                    <h4 class="text-sm font-bold text-white">Published Links</h4>
+                                    <button onclick="openAddLinkModal()" class="px-3 py-1.5 rounded-lg bg-vault-700 hover:bg-vault-600 text-amber-400 text-xs font-medium border border-amber-500/30 transition flex items-center gap-1.5">
+                                        <i class="fa-solid fa-plus"></i> Add Link
+                                    </button>
+                                </div>
+                                <div id="bio-links-editor-list" class="space-y-2">
+                                    <!-- Populated via JS -->
+                                </div>
+                            </div>
+
+                            <button onclick="publishBioChanges()" class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-vault-900 font-bold text-sm transition shadow-lg glow-amber flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-globe"></i> Publish Profile Changes
+                            </button>
+                        </div>
+
+                        <!-- Live Preview Card -->
+                        <div class="glass-card p-6 rounded-2xl border border-white/10 flex flex-col items-center justify-center relative">
+                            <div class="absolute top-4 left-4 text-xs text-gray-400 font-medium flex items-center gap-1.5">
+                                <i class="fa-solid fa-eye"></i> Live Mobile Preview
+                            </div>
+                            <div class="w-full max-w-xs bg-vault-900 rounded-3xl border-4 border-vault-700 p-4 shadow-2xl space-y-4 my-8">
+                                <div class="flex flex-col items-center text-center space-y-2 pt-4">
+                                    <img id="preview-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80" alt="Avatar" class="w-20 h-20 rounded-full object-cover border-2 border-amber-400 shadow-lg">
+                                    <h3 id="preview-name" class="font-bold text-white text-base">Alex Rivera</h3>
+                                    <p id="preview-tagline" class="text-xs text-gray-300 px-2">AR Lens Creator & Tech Visualist. Creating 12+ private face-tracking presets.</p>
+                                </div>
+                                <div id="preview-links-container" class="space-y-2.5 pt-2">
+                                    <!-- Links populated dynamically -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: PUBLIC READ-ONLY PROFILE VIEW -->
+        <section id="tab-public" class="tab-content hidden space-y-8">
+            <div class="max-w-xl mx-auto glass-panel p-8 rounded-3xl border border-white/10 shadow-2xl relative overflow-hidden">
+                <div class="absolute -top-24 -right-24 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                <div class="flex flex-col items-center text-center space-y-3 mb-8">
+                    <div class="relative">
+                        <img id="pub-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80" alt="Creator Avatar" class="w-24 h-24 rounded-full object-cover border-2 border-amber-400 shadow-xl glow-amber">
+                        <div class="absolute bottom-0 right-0 bg-emerald-500 text-vault-900 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2 border-vault-900" title="Verified Creator">
+                            <i class="fa-solid fa-check text-[10px]"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <h2 id="pub-name" class="text-2xl font-bold text-white tracking-wide">Alex Rivera</h2>
+                        <p id="pub-tagline" class="text-sm text-gray-300 mt-1 max-w-sm">AR Lens Creator & Tech Visualist. Creating 12+ private face-tracking presets.</p>
+                    </div>
+                    <div class="flex items-center gap-2 pt-1">
+                        <span class="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-medium flex items-center gap-1.5">
+                            <i class="fa-solid fa-shield-halved text-[10px]"></i> Verified Public Profile
+                        </span>
+                        <span class="px-3 py-1 rounded-full bg-vault-800 text-gray-300 text-xs font-medium">
+                            <i class="fa-solid fa-lock text-[10px] text-amber-400 mr-1"></i> Drafts & Vault Private
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Published Outbound Links -->
+                <div class="space-y-3.5 mb-8" id="pub-links-container">
+                    <!-- Populated dynamically via JS -->
+                </div>
+
+                <div class="pt-6 border-t border-white/10 text-center space-y-2">
+                    <p class="text-xs text-gray-400 flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-shield-heart text-amber-400"></i> Safe Outbound Click Tracking Enabled
+                    </p>
+                    <p class="text-[11px] text-gray-500">
+                        Links open securely with privacy protection. Creator analytics record total unique clicks anonymously.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="glass-panel py-6 px-4 text-center border-t border-white/10 text-xs text-gray-400 mt-auto">
+        <p>Lens Vault API Studio &bull; Encrypted Private AR Presets & Creator Hub &bull; 12 Interactive Face Filters</p>
+    </footer>
+
+    <!-- MODAL: UPLOAD VAULT ASSET -->
+    <div id="upload-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden px-4">
+        <div class="glass-panel w-full max-w-md p-6 rounded-2xl border border-white/10 space-y-4 relative">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-cloud-arrow-up text-amber-400"></i> Upload Private Vault Asset
+                </h3>
+                <button onclick="closeUploadModal()" class="text-gray-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs font-semibold text-gray-300 uppercase tracking-wider">Asset Title</label>
+                    <input type="text" id="upload-title" placeholder="e.g. Matrix Binary Shader LUT" class="w-full bg-vault-800 text-sm rounded-xl px-4 py-2.5 border border-white/10 focus:outline-none focus:border-amber-500 text-white mt-1">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-gray-300 uppercase tracking-wider">Category</label>
+                    <select id="upload-category" class="w-full bg-vault-800 text-sm rounded-xl px-4 py-2.5 border border-white/10 focus:outline-none focus:border-amber-500 text-white mt-1">
+                        <option value="preset">Lens Preset (Face Tracking)</option>
+                        <option value="media">Color LUT & Capture Media</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-gray-300 uppercase tracking-wider">Description</label>
+                    <textarea id="upload-desc" rows="2" placeholder="Private notes or filter parameters..." class="w-full bg-vault-800 text-sm rounded-xl px-4 py-2.5 border border-white/10 focus:outline-none focus:border-amber-500 text-white mt-1"></textarea>
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 pt-2">
+                <button onclick="closeUploadModal()" class="px-4 py-2 rounded-xl bg-vault-700 text-sm font-medium text-gray-300 hover:text-white transition">Cancel</button>
+                <button onclick="confirmUploadAsset()" class="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-vault-900 font-bold text-sm transition shadow-md">Upload Securely</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: NEW STORY DRAFT -->
+    <div id="story-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden px-4">
+        <div class="glass-panel w-full max-w-md p-6 rounded-2xl border border-white/10 space-y-4 relative">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-pen-nib text-amber-400"></i> New Story Draft
+                </h3>
+                <button onclick="closeNewStoryModal()" class="text-gray-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs font-semibold text-gray-300 uppercase tracking-wider">Story Title</label>
+                    <input type="text" id="story-title-input" placeholder="e.g. Testing Kawaii Blush AR Filters" class="w-full bg-vault-800 text-sm rounded-xl px-4 py-2.5 border border-white/10 focus:outline-none focus:border-amber-500 text-white mt-1">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-gray-300 uppercase tracking-wider">Category</label>
+                    <select id="story-cat-input" class="w-full bg-vault-800 text-sm rounded-xl px-4 py-2.5 border border-white/10 focus:outline-none focus:border-amber-500 text-white mt-1">
+                        <option value="Story Series">Story Series</option>
+                        <option value="Quick Tip">Quick Tip / Tutorial</option>
+                        <option value="Exclusive Drop">Exclusive Drop</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-gray-300 uppercase tracking-wider">Outline / Notes</label>
+                    <textarea id="story-desc-input" rows="3" placeholder="Notes, key points, and presets used..." class="w-full bg-vault-800 text-sm rounded-xl px-4 py-2.5 border border-white/10 focus:outline-none focus:border-amber-500 text-white mt-1"></textarea>
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 pt-2">
+                <button onclick="closeNewStoryModal()" class="px-4 py-2 rounded-xl bg-vault-700 text-sm font-medium text-gray-300 hover:text-white transition">Cancel</button>
+                <button onclick="saveNewStoryDraft()" class="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-vault-900 font-bold text-sm transition shadow-md">Save Draft Privately</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: ADD LINK TO BIO -->
+    <div id="link-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden px-4">
+        <div class="glass-panel w-full max-w-md p-6 rounded-2xl border border-white/10 space-y-4 relative">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-link text-amber-400"></i> Add Outbound Link
+                </h3>
+                <button onclick="closeAddLinkModal()" class="text-gray-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs font-semibold text-gray-300 uppercase tracking-wider">Title</label>
+                    <input type="text" id="new-link-title" placeholder="e.g. My Lens Vault Portfolio" class="w-full bg-vault-800 text-sm rounded-xl px-4 py-2.5 border border-white/10 focus:outline-none focus:border-amber-500 text-white mt-1">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-gray-300 uppercase tracking-wider">URL</label>
+                    <input type="text" id="new-link-url" placeholder="https://example.com" class="w-full bg-vault-800 text-sm rounded-xl px-4 py-2.5 border border-white/10 focus:outline-none focus:border-amber-500 text-white mt-1">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-gray-300 uppercase tracking-wider">Icon Class</label>
+                    <input type="text" id="new-link-icon" value="fa-solid fa-globe" class="w-full bg-vault-800 text-sm rounded-xl px-4 py-2.5 border border-white/10 focus:outline-none focus:border-amber-500 text-white mt-1">
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 pt-2">
+                <button onclick="closeAddLinkModal()" class="px-4 py-2 rounded-xl bg-vault-700 text-sm font-medium text-gray-300 hover:text-white transition">Cancel</button>
+                <button onclick="confirmAddLink()" class="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-vault-900 font-bold text-sm transition shadow-md">Add Link</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: API TOKEN KEY -->
+    <div id="token-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden px-4">
+        <div class="glass-panel w-full max-w-md p-6 rounded-2xl border border-white/10 space-y-4 relative">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-key text-amber-400"></i> API Auth Bearer Token
+                </h3>
+                <button onclick="closeTokenModal()" class="text-gray-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <p class="text-xs text-gray-300">Your private vault API key secures end-to-end sync of 12+ AR lens presets and creator analytics.</p>
+            <div>
+                <label class="text-xs font-semibold text-gray-300 uppercase tracking-wider">Bearer Token</label>
+                <input type="text" id="api-token-val" value="lv_live_sk_99a8f7e6d5c4b3a210987654" readonly class="w-full bg-vault-800 font-mono text-xs rounded-xl px-4 py-3 border border-white/10 text-amber-400 mt-1">
+            </div>
+            <div class="flex justify-end gap-3 pt-2">
+                <button onclick="closeTokenModal()" class="px-4 py-2 rounded-xl bg-vault-700 text-sm font-medium text-gray-300 hover:text-white transition">Close</button>
+                <button onclick="regenerateApiToken()" class="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-vault-900 font-bold text-sm transition shadow-md">Rotate Key</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NOTIFICATION TOAST -->
+    <div id="toast-notification" class="fixed bottom-20 md:bottom-8 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 glass-panel px-4 py-3 rounded-xl border border-amber-500/40 shadow-2xl flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
+            <i class="fa-solid fa-check" id="toast-icon"></i>
+        </div>
+        <div>
+            <div id="toast-title" class="text-sm font-bold text-white">Success</div>
+            <div id="toast-desc" class="text-xs text-gray-300">Operation completed.</div>
+        </div>
+    </div>
+
+    <!-- APPLICATION LOGIC SCRIPT -->
+    <script>
+        // Comprehensive 12 Filter Suite Definition
+        const AR_FILTERS = [
+            {
+                id: 'crown',
+                name: 'Cyber Crown / HUD',
+                category: 'cyber',
+                icon: '👑',
+                visual: '<div class="text-6xl mb-2 drop-shadow-[0_0_20px_rgba(245,158,11,0.9)]">👑</div><div class="text-xs font-bold bg-black/70 px-3 py-1 rounded-md text-amber-300 border border-amber-500/30">Cyber Crown v2</div>',
+                meshClass: 'border-amber-400/70',
+                meshColor: '#fbbf24',
+                fxClass: ''
+            },
+            {
+                id: 'neon',
+                name: 'Neon Aura Glow',
+                category: 'glow',
+                icon: '💫',
+                visual: '<div class="text-6xl mb-2 drop-shadow-[0_0_20px_rgba(34,211,238,0.9)]">💫</div><div class="text-xs font-bold bg-black/70 px-3 py-1 rounded-md text-cyan-300 border border-cyan-500/30">Neon Aura</div>',
+                meshClass: 'border-cyan-400/70',
+                meshColor: '#22d3ee',
+                fxClass: ''
+            },
+            {
+                id: 'vhs',
+                name: 'VHS Retro 80s Glitch',
+                category: 'retro',
+                icon: '📼',
+                visual: '<div class="text-6xl mb-2 drop-shadow-[0_0_20px_rgba(244,114,182,0.9)]">📼</div><div class="text-xs font-bold bg-black/70 px-3 py-1 rounded-md text-pink-300 border border-pink-500/30">VHS Glitch 1988</div>',
+                meshClass: 'border-pink-400/70',
+                meshColor: '#f472b6',
+                fxClass: 'fx-vhs'
+            },
+            {
+                id: 'botanical',
+                name: 'Botanical Sparkle',
+                category: 'glow',
+                icon: '🌿',
+                visual: '<div class="text-6xl mb-2 drop-shadow-[0_0_20px_rgba(74,222,128,0.9)]">🌿</div><div class="text-xs font-bold bg-black/70 px-3 py-1 rounded-md text-emerald-300 border border-emerald-500/30">Golden Hour Sparkle</div>',
+                meshClass: 'border-emerald-400/70',
+                meshColor: '#4ade80',
+                fxClass: ''
+            },
+            {
+                id: 'thermal',
+                name: 'Thermal Vision Predator',
+                category: 'cyber',
+                icon: '🔥',
+                visual: '<div class="text-6xl mb-2 drop-shadow-[0_0_20px_rgba(239,68,68,0.9)]">🔥</div><div class="text-xs font-bold bg-black/70 px-3 py-1 rounded-md text-red-400 border border-red-500/30">Thermal Heatmap</div>',
+                meshClass: 'border-red-500/80',
+                meshColor: '#ef4444',
+                fxClass: 'fx-thermal'
+            },
+            {
+                id: 'matrix',
+                name: 'Matrix Code Rain',
+                category: 'cyber',
+                icon: '💻',
+                visual: '<div class="text-6xl mb-2 drop-shadow-[0_0_20px_rgba(34,197,94,0.9)]">💻</div><div class="text-xs font-mono font-bold bg-black/80 px-3 py-1 rounded-md text-green-400 border border-green-500/40">ASCII Code Rain</div>',
+                meshClass: 'border-green-400/80',
+                meshColor: '#22c55e',
+                fxClass: 'fx-matrix'
+            },
+            {
+                id: 'popart',
+                name: 'Comic Book Pop Art',
+                category: 'art',
+                icon: '🎨',
+                visual: '<div class="text-6xl mb-2 drop-shadow-[0_0_20px_rgba(251,191,36,0.9)]">🎨</div><div class="text-xs font-bold bg-black/80 px-3 py-1 rounded-md text-yellow-300 border border-yellow-500/30">Halftone Pop Art</div>',
+                meshClass: 'border-yellow-400/80',
+                meshColor: '#facc15',
+                fxClass: 'fx-popart'
+            },
+            {
+                id: 'noir',
+                name: 'Midnight Noir Film',
+                category: 'retro',
+                icon: '🎬',
+                visual: '<div class="text-6xl mb-2 drop-shadow-[0_0_20px_rgba(255,255,255,0.9)]">🎬</div><div class="text-xs font-bold bg-black/80 px-3 py-1 rounded-md text-gray-200 border border-gray-400/30">Film Noir B&W</div>',
+                meshClass: 'border-gray-300/80',
+                meshColor: '#e5e7eb',
+                fxClass: 'fx-noir'
+            },
+            {
+                id: 'kawaii',
+                name: 'Anime Kawaii Sparkle',
+                category: 'art',
+                icon: '✨',
+                visual: '<div class="text-6xl mb-2 drop-shadow-[0_0_20px_rgba(244,114,182,0.9)]">✨</div><div class="text-xs font-bold bg-black/80 px-3 py-1 rounded-md text-pink-300 border border-pink-400/30">Kawaii Blush</div>',
+                meshClass: 'border-pink-300/80',
+                meshColor: '#f472b6',
+                fxClass: ''
+            },
+            {
+                id: 'vaporwave',
+                name: 'Vaporwave Sunset',
+                category: 'retro',
+                icon: '🌅',
+                visual: '<div class="text-6xl mb-2 drop-shadow-[0_0_20px_rgba(168,85,247,0.9)]">🌅</div><div class="text-xs font-bold bg-black/80 px-3 py-1 rounded-md text-purple-300 border border-purple-400/30">Vaporwave Grid</div>',
+                meshClass: 'border-purple-400/80',
+                meshColor: '#c084fc',
+                fxClass: 'fx-vapor'
+            },
+            {
+                id: 'glitchpunk',
+                name: 'Glitch Punk RGB',
+                category: 'cyber',
+                icon: '⚡',
+                visual: '<div class="text-6xl mb-2 drop-shadow-[0_0_20px_rgba(34,211,238,0.9)]">⚡</div><div class="text-xs font-bold bg-black/80 px-3 py-1 rounded-md text-cyan-300 border border-cyan-400/30">RGB Glitchpunk</div>',
+                meshClass: 'border-cyan-400/80',
+                meshColor: '#22d3ee',
+                fxClass: 'fx-glitch-punk'
+            },
+            {
+                id: 'beautyglow',
+                name: 'Studio Ring Light',
+                category: 'glow',
+                icon: '💡',
+                visual: '<div class="text-6xl mb-2 drop-shadow-[0_0_20px_rgba(255,255,255,0.9)]">💡</div><div class="text-xs font-bold bg-black/80 px-3 py-1 rounded-md text-white border border-white/30">Studio Catchlight</div>',
+                meshClass: 'border-white/80',
+                meshColor: '#ffffff',
+                fxClass: ''
+            }
+        ];
+
+        // Application State
+        let appState = {
+            activeTab: 'camera',
+            plannerSubTab: 'stories',
+            vaultFilter: 'all',
+            activeCategory: 'all',
+            activeFilterId: 'crown',
+            filterIntensity: 85,
+            meshVisible: true,
+            audioActive: true,
+            gridActive: false,
+            currentPaletteBg: 'from-amber-950 via-zinc-900 to-vault-900',
+            vaultAssets: [
+                { id: 1, title: '👑 Cyber Crown / Sci-Fi HUD', type: 'preset', desc: 'Gold glowing face mesh with HUD particle sparks.', date: '2026-10-27', size: '14.2 MB', metrics: '21.6K Uses' },
+                { id: 2, title: '💫 Neon Aura Holographic LUT', type: 'media', desc: 'Teal & amber cyberpunk color grading matrix.', date: '2026-10-26', size: '8.5 MB', metrics: '15.1K Uses' },
+                { id: 3, title: '📼 80s VHS Glitch Preset', type: 'preset', desc: 'Scanlines & chromatic aberration analog filter.', date: '2026-10-24', size: '19.8 MB', metrics: '11.3K Uses' },
+                { id: 4, title: '💻 Matrix Code Rain Shader', type: 'preset', desc: 'Digital binary stream green tint ASCII face outline.', date: '2026-10-22', size: '16.4 MB', metrics: '9.8K Uses' },
+                { id: 5, title: '🌅 Vaporwave Sunset Capture', type: 'media', desc: 'Sunset synthwave gradient grid overlay.', date: '2026-10-20', size: '22.1 MB', metrics: 'Private' }
+            ],
+            storyDrafts: [
+                { id: 1, title: 'Testing 12+ Face Tracking AR Filters', category: 'Story Series', status: 'Drafting', date: 'Oct 27, 2026', outline: 'Walkthrough of Thermal, Matrix Code Rain, and Cyber Crown presets.' },
+                { id: 2, title: 'Quick Tip: Tuning Filter Depth Intensity', category: 'Quick Tip', status: 'Reviewing', date: 'Oct 25, 2026', outline: 'Demonstrate real-time intensity slider for studio catchlights.' }
+            ],
+            bioProfile: {
+                name: 'Alex Rivera',
+                tagline: 'AR Lens Creator & Tech Visualist. Creating 12+ private face-tracking presets.',
+                avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80',
+                links: [
+                    { id: 1, title: '🚀 Lens Vault Presets & Shader Hub', url: 'https://github.com', icon: 'fa-solid fa-code', clicks: 684 },
+                    { id: 2, title: '🎨 AR Visual Portfolio & Showcase', url: 'https://behance.net', icon: 'fa-solid fa-wand-magic-sparkles', clicks: 492 },
+                    { id: 3, title: '☕ Buy Me a Coffee / Support Creator', url: 'https://buymeacoffee.com', icon: 'fa-solid fa-mug-hot', clicks: 316 }
+                ]
+            }
+        };
+
+        // Tab Navigation
+        function switchTab(tabId) {
+            appState.activeTab = tabId;
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById('tab-' + tabId).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.className = "tab-btn px-4 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-vault-700 transition flex items-center gap-2";
+            });
+            const activeBtn = document.getElementById('nav-' + tabId);
+            if(activeBtn) {
+                activeBtn.className = "tab-btn px-4 py-2 rounded-lg text-sm font-medium bg-amber-500 text-vault-900 shadow-md flex items-center gap-2";
+            }
+
+            document.querySelectorAll('.mob-tab').forEach(btn => {
+                btn.className = "mob-tab flex flex-col items-center text-gray-400 text-xs";
+            });
+            const activeMobBtn = document.getElementById('mob-' + tabId);
+            if(activeMobBtn) {
+                activeMobBtn.className = "mob-tab flex flex-col items-center text-amber-400 text-xs font-semibold";
+            }
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function switchPlannerTab(subId) {
+            appState.plannerSubTab = subId;
+            document.querySelectorAll('.planner-section').forEach(el => el.classList.add('hidden'));
+            document.getElementById('plan-view-' + subId).classList.remove('hidden');
+
+            document.querySelectorAll('.planner-sub-btn').forEach(btn => {
+                btn.className = "planner-sub-btn px-4 py-2 rounded-lg text-xs font-semibold bg-vault-800 text-gray-300 hover:text-white transition";
+            });
+            document.getElementById('plan-tab-' + subId).className = "planner-sub-btn px-4 py-2 rounded-lg text-xs font-semibold bg-amber-500 text-vault-900 transition";
+        }
+
+        // Render AR Filter Suite Library
+        function renderFilterLibrary() {
+            const grid = document.getElementById('filter-grid');
+            const filtered = AR_FILTERS.filter(f => appState.activeCategory === 'all' || f.category === appState.activeCategory);
+
+            grid.innerHTML = filtered.map(f => {
+                const isActive = f.id === appState.activeFilterId;
+                return `
+                    <button onclick="selectArFilter('${f.id}')" class="p-2.5 rounded-xl border text-left transition flex items-center gap-2.5 ${isActive ? 'bg-amber-500/15 border-amber-500 text-amber-300 shadow-lg' : 'bg-vault-800 border-white/5 text-gray-300 hover:bg-vault-700 hover:text-white'}">
+                        <span class="text-2xl">${f.icon}</span>
+                        <div class="truncate">
+                            <div class="text-xs font-bold truncate">${f.name}</div>
+                            <div class="text-[10px] text-gray-400 capitalize truncate">${f.category}</div>
+                        </div>
+                    </button>
+                `;
+            }).join('');
+
+            document.getElementById('active-filter-badge').innerText = filtered.length + ' Filters';
+        }
+
+        function filterCategory(cat) {
+            appState.activeCategory = cat;
+            document.querySelectorAll('.cat-btn').forEach(btn => {
+                btn.className = "cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-vault-800 text-gray-300 hover:text-white whitespace-nowrap transition";
+            });
+            event.target.className = "cat-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 text-vault-900 whitespace-nowrap transition";
+            renderFilterLibrary();
+        }
+
+        function selectArFilter(filterId) {
+            appState.activeFilterId = filterId;
+            const filterObj = AR_FILTERS.find(f => f.id === filterId);
+            if(!filterObj) return;
+
+            // Update Visuals
+            const filterVisual = document.getElementById('ar-filter-visual');
+            filterVisual.innerHTML = filterObj.visual;
+
+            const faceMesh = document.getElementById('ar-face-mesh');
+            faceMesh.className = `absolute inset-0 border-2 border-dashed ${filterObj.meshClass} rounded-full animate-pulse flex items-center justify-center transition-all duration-300`;
+
+            const fxOverlay = document.getElementById('cam-fx-overlay');
+            fxOverlay.className = `absolute inset-0 pointer-events-none transition-all duration-300 ${filterObj.fxClass}`;
+
+            renderFilterLibrary();
+        }
+
+        function cycleArFilter(dir) {
+            const currentIdx = AR_FILTERS.findIndex(f => f.id === appState.activeFilterId);
+            let newIdx = currentIdx + dir;
+            if (newIdx >= AR_FILTERS.length) newIdx = 0;
+            if (newIdx < 0) newIdx = AR_FILTERS.length - 1;
+            selectArFilter(AR_FILTERS[newIdx].id);
+        }
+
+        function updateFilterIntensity(val) {
+            appState.filterIntensity = val;
+            document.getElementById('intensity-val').innerText = val + '%';
+            document.getElementById('ar-filter-visual').style.opacity = (val / 100);
+            document.getElementById('cam-fx-overlay').style.opacity = (val / 100);
+        }
+
+        function toggleFaceMesh() {
+            appState.meshVisible = !appState.meshVisible;
+            document.getElementById('ar-face-mesh').style.display = appState.meshVisible ? 'flex' : 'none';
+            document.getElementById('mesh-status-text').innerText = appState.meshVisible ? 'ON' : 'OFF';
+        }
+
+        function setPalette(colorKey, paletteName, gradientClass) {
+            appState.currentPaletteBg = gradientClass;
+            document.getElementById('cam-bg-gradient').className = "absolute inset-0 bg-gradient-to-br " + gradientClass + " transition-all duration-300";
+            document.getElementById('ar-palette-tag').innerText = "Palette: " + paletteName;
+
+            document.querySelectorAll('.palette-btn').forEach(btn => {
+                btn.className = "palette-btn p-2 rounded-xl border border-white/10 bg-vault-800 text-xs text-gray-300 hover:text-white flex flex-col items-center gap-1 transition";
+            });
+            event.currentTarget.className = "palette-btn p-2 rounded-xl border border-amber-500/50 bg-amber-500/10 text-xs text-amber-300 font-medium flex flex-col items-center gap-1 transition";
+        }
+
+        function updateLiveCaption(val) {
+            document.getElementById('ar-caption-display').innerText = '"' + (val || '...') + '"';
+        }
+
+        function updateLiveJoke(val) {
+            document.getElementById('ar-joke-tag').innerText = val;
+        }
+
+        function toggleCameraAudio() {
+            appState.audioActive = !appState.audioActive;
+            document.getElementById('cam-audio-btn').innerHTML = appState.audioActive ? '<i class="fa-solid fa-volume-high"></i>' : '<i class="fa-solid fa-volume-xmark text-gray-500"></i>';
+            showToast('AR Audio', appState.audioActive ? 'Audio active.' : 'Audio muted.');
+        }
+
+        function toggleCamGrid() {
+            appState.gridActive = !appState.gridActive;
+            document.getElementById('cam-grid').style.opacity = appState.gridActive ? '1' : '0';
+        }
+
+        function captureArPhoto() {
+            const flash = document.getElementById('camera-flash');
+            flash.style.opacity = '1';
+            setTimeout(() => flash.style.opacity = '0', 150);
+
+            const activeFilter = AR_FILTERS.find(f => f.id === appState.activeFilterId);
+            const newAsset = {
+                id: Date.now(),
+                title: 'Capture: ' + activeFilter.name,
+                type: 'media',
+                desc: 'Captured with intensity ' + appState.filterIntensity + '% and caption: ' + document.getElementById('custom-caption-input').value,
+                date: 'Just now',
+                size: '12.8 MB',
+                metrics: 'Private Vault'
+            };
+            appState.vaultAssets.unshift(newAsset);
+            renderVaultGrid();
+            showToast('Snapshot Saved', 'AR snapshot saved to Private Vault with metadata.');
+        }
+
+        function saveCurrentPresetToVault() {
+            const activeFilter = AR_FILTERS.find(f => f.id === appState.activeFilterId);
+            const newPreset = {
+                id: Date.now(),
+                title: activeFilter.name + ' Preset',
+                type: 'preset',
+                desc: 'Depth intensity: ' + appState.filterIntensity + '% | Joke Tag: ' + document.getElementById('custom-joke-input').value,
+                date: 'Today',
+                size: '15.4 MB',
+                metrics: '0 Uses'
+            };
+            appState.vaultAssets.unshift(newPreset);
+            renderVaultGrid();
+            showToast('Preset Saved', 'AR preset synced with Vault API.');
+        }
+
+        // Vault Rendering
+        function renderVaultGrid() {
+            const grid = document.getElementById('vault-grid');
+            const search = document.getElementById('vault-search').value.toLowerCase();
+            
+            const filtered = appState.vaultAssets.filter(item => {
+                const matchesSearch = item.title.toLowerCase().includes(search) || item.desc.toLowerCase().includes(search);
+                const matchesType = appState.vaultFilter === 'all' || item.type === appState.vaultFilter;
+                return matchesSearch && matchesType;
+            });
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `<div class="col-span-full py-12 text-center text-gray-400"><i class="fa-solid fa-folder-open text-4xl mb-3 text-vault-600"></i><p class="text-sm">No vault assets found.</p></div>`;
+                return;
+            }
+
+            grid.innerHTML = filtered.map(item => `
+                <div class="glass-card p-5 rounded-2xl border border-white/5 flex flex-col justify-between hover:border-amber-500/30 transition group">
+                    <div>
+                        <div class="flex justify-between items-start mb-3">
+                            <span class="px-2.5 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider ${item.type === 'preset' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'}">
+                                ${item.type === 'preset' ? 'Lens Preset' : 'Media / LUT'}
+                            </span>
+                            <span class="text-xs text-gray-400 font-mono">${item.size}</span>
+                        </div>
+                        <h3 class="font-bold text-white text-base mb-1 group-hover:text-amber-400 transition">${item.title}</h3>
+                        <p class="text-xs text-gray-400 line-clamp-2">${item.desc}</p>
+                    </div>
+                    <div class="pt-4 mt-4 border-t border-white/5 flex items-center justify-between text-xs">
+                        <span class="text-gray-400"><i class="fa-solid fa-chart-simple mr-1 text-amber-400"></i> ${item.metrics}</span>
+                        <div class="flex items-center gap-2">
+                            <button onclick="showToast('Downloading', 'Decrypting asset...')" class="p-2 rounded-lg bg-vault-700 hover:bg-vault-600 text-white transition"><i class="fa-solid fa-download text-xs"></i></button>
+                            <button onclick="deleteVaultAsset(${item.id})" class="p-2 rounded-lg bg-vault-700 hover:bg-red-500/20 text-gray-300 hover:text-red-400 transition"><i class="fa-solid fa-trash text-xs"></i></button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            document.getElementById('vault-preset-count').innerText = appState.vaultAssets.filter(a => a.type === 'preset').length;
+        }
+
+        function setVaultFilter(filter) {
+            appState.vaultFilter = filter;
+            document.querySelectorAll('.vault-filter-btn').forEach(btn => {
+                btn.className = "vault-filter-btn px-3.5 py-2 rounded-lg text-xs font-medium bg-vault-800 text-gray-300 hover:text-white transition flex-1 sm:flex-none";
+            });
+            event.target.className = "vault-filter-btn px-3.5 py-2 rounded-lg text-xs font-medium bg-amber-500 text-vault-900 transition flex-1 sm:flex-none";
+            renderVaultGrid();
+        }
+
+        function filterVaultAssets() { renderVaultGrid(); }
+
+        // Planner & Bio Hub
+        function renderStoryDrafts() {
+            const grid = document.getElementById('story-drafts-grid');
+            grid.innerHTML = appState.storyDrafts.map(story => `
+                <div class="glass-card p-5 rounded-2xl border border-white/5 flex flex-col justify-between">
+                    <div>
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">${story.category}</span>
+                            <span class="text-xs text-gray-400">${story.date}</span>
+                        </div>
+                        <h3 class="font-bold text-white text-base mb-2">${story.title}</h3>
+                        <p class="text-xs text-gray-300">${story.outline}</p>
+                    </div>
+                    <div class="pt-4 mt-4 border-t border-white/5 flex items-center justify-between">
+                        <span class="text-xs px-2.5 py-1 rounded-md bg-vault-800 text-amber-300 font-medium">Status: ${story.status}</span>
+                        <button onclick="deleteStoryDraft(${story.id})" class="text-gray-400 hover:text-red-400 text-xs transition"><i class="fa-solid fa-trash"></i> Delete</button>
+                    </div>
+                </div>
+            `).join('');
+
+            const tbody = document.getElementById('performance-table-body');
+            tbody.innerHTML = appState.vaultAssets.map(item => `
+                <tr>
+                    <td class="py-3 font-medium text-white">${item.title}</td>
+                    <td class="py-3 capitalize">${item.type}</td>
+                    <td class="py-3 text-amber-400 font-semibold">${item.metrics}</td>
+                    <td class="py-3"><span class="px-2 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Synced</span></td>
+                    <td class="py-3 text-right">
+                        <button onclick="showToast('Analytics', 'Viewing metrics for ' + '${item.title}')" class="px-3 py-1 rounded-lg bg-vault-700 hover:bg-vault-600 text-xs text-white transition">Stats</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function renderBioHub() {
+            const editorList = document.getElementById('bio-links-editor-list');
+            editorList.innerHTML = appState.bioProfile.links.map(link => `
+                <div class="flex items-center justify-between p-3 rounded-xl bg-vault-800 border border-white/5">
+                    <div class="flex items-center gap-3 overflow-hidden">
+                        <i class="${link.icon} text-amber-400 text-sm"></i>
+                        <div class="truncate">
+                            <div class="text-sm font-medium text-white truncate">${link.title}</div>
+                            <div class="text-xs text-gray-400 truncate">${link.url}</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-400 font-mono"><i class="fa-solid fa-mouse-pointer text-[10px] mr-1 text-amber-400"></i>${link.clicks}</span>
+                        <button onclick="deleteBioLink(${link.id})" class="p-1.5 rounded-lg text-gray-400 hover:text-red-400 transition"><i class="fa-solid fa-trash text-xs"></i></button>
+                    </div>
+                </div>
+            `).join('');
+
+            const totalClicks = appState.bioProfile.links.reduce((acc, l) => acc + l.clicks, 0);
+            if(document.getElementById('stat-total-clicks')) document.getElementById('stat-total-clicks').innerText = totalClicks.toLocaleString();
+
+            updateBioPreview();
+            renderPublicProfile();
+        }
+
+        function updateBioPreview() {
+            const name = document.getElementById('bio-edit-name').value;
+            const tagline = document.getElementById('bio-edit-tagline').value;
+            const avatar = document.getElementById('bio-edit-avatar').value;
+
+            document.getElementById('preview-name').innerText = name;
+            document.getElementById('preview-tagline').innerText = tagline;
+            document.getElementById('preview-avatar').src = avatar;
+
+            const previewLinksContainer = document.getElementById('preview-links-container');
+            previewLinksContainer.innerHTML = appState.bioProfile.links.map(link => `
+                <div class="w-full py-2.5 px-4 rounded-xl bg-vault-800 border border-white/10 text-xs font-semibold text-white flex items-center justify-between">
+                    <span class="flex items-center gap-2 truncate"><i class="${link.icon} text-amber-400"></i> ${link.title}</span>
+                    <i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-gray-400"></i>
+                </div>
+            `).join('');
+        }
+
+        function renderPublicProfile() {
+            document.getElementById('pub-name').innerText = appState.bioProfile.name;
+            document.getElementById('pub-tagline').innerText = appState.bioProfile.tagline;
+            document.getElementById('pub-avatar').src = appState.bioProfile.avatar;
+
+            const pubLinks = document.getElementById('pub-links-container');
+            pubLinks.innerHTML = appState.bioProfile.links.map(link => `
+                <a href="${link.url}" target="_blank" onclick="trackOutboundClick(${link.id}, event)" class="w-full py-3.5 px-5 rounded-2xl bg-vault-800 hover:bg-vault-700 border border-white/10 text-sm font-semibold text-white flex items-center justify-between transition shadow-md group">
+                    <span class="flex items-center gap-3"><i class="${link.icon} text-amber-400 text-base group-hover:scale-110 transition"></i> ${link.title}</span>
+                    <i class="fa-solid fa-arrow-up-right-from-square text-xs text-gray-400 group-hover:text-amber-400 transition"></i>
+                </a>
+            `).join('');
+        }
+
+        function trackOutboundClick(linkId) {
+            const link = appState.bioProfile.links.find(l => l.id === linkId);
+            if(link) {
+                link.clicks++;
+                showToast('Click Tracked', 'Recorded click for "' + link.title + '" anonymously.');
+                renderBioHub();
+            }
+        }
+
+        // Modals & Handlers
+        function openUploadModal() { document.getElementById('upload-modal').classList.remove('hidden'); }
+        function closeUploadModal() { document.getElementById('upload-modal').classList.add('hidden'); }
+        function confirmUploadAsset() {
+            const title = document.getElementById('upload-title').value || 'Untitled Asset';
+            const category = document.getElementById('upload-category').value;
+            const desc = document.getElementById('upload-desc').value || 'No description provided.';
+            appState.vaultAssets.unshift({ id: Date.now(), title, type: category, desc, date: 'Just now', size: '11.0 MB', metrics: 'Private' });
+            renderVaultGrid();
+            closeUploadModal();
+            showToast('Uploaded', 'Asset saved to private vault.');
+        }
+
+        function openNewStoryModal() { document.getElementById('story-modal').classList.remove('hidden'); }
+        function closeNewStoryModal() { document.getElementById('story-modal').classList.add('hidden'); }
+        function saveNewStoryDraft() {
+            const title = document.getElementById('story-title-input').value || 'Untitled Story';
+            const category = document.getElementById('story-cat-input').value;
+            const outline = document.getElementById('story-desc-input').value || 'No outline.';
+            appState.storyDrafts.unshift({ id: Date.now(), title, category, status: 'Drafting', date: 'Today', outline });
+            renderStoryDrafts();
+            closeNewStoryModal();
+            showToast('Draft Saved', 'Story draft saved to planner.');
+        }
+
+        function openAddLinkModal() { document.getElementById('link-modal').classList.remove('hidden'); }
+        function closeAddLinkModal() { document.getElementById('link-modal').classList.add('hidden'); }
+        function confirmAddLink() {
+            const title = document.getElementById('new-link-title').value;
+            const url = document.getElementById('new-link-url').value;
+            const icon = document.getElementById('new-link-icon').value || 'fa-solid fa-globe';
+            if(!title || !url) return;
+            appState.bioProfile.links.push({ id: Date.now(), title, url, icon, clicks: 0 });
+            renderBioHub();
+            closeAddLinkModal();
+            showToast('Link Added', 'Outbound link added to profile.');
+        }
+
+        function openTokenModal() { document.getElementById('token-modal').classList.remove('hidden'); }
+        function closeTokenModal() { document.getElementById('token-modal').classList.add('hidden'); }
+        function regenerateApiToken() {
+            document.getElementById('api-token-val').value = 'lv_live_sk_' + Math.random().toString(36).substring(2, 15);
+            showToast('Key Rotated', 'New authentication token issued.');
+        }
+
+        function triggerApiSync() {
+            const icon = document.getElementById('sync-icon');
+            icon.classList.add('fa-spin');
+            setTimeout(() => {
+                icon.classList.remove('fa-spin');
+                showToast('API Synced', 'All presets and stats synchronized.');
+            }, 800);
+        }
+
+        function deleteVaultAsset(id) {
+            appState.vaultAssets = appState.vaultAssets.filter(a => a.id !== id);
+            renderVaultGrid();
+            showToast('Deleted', 'Asset removed from vault.');
+        }
+
+        function deleteStoryDraft(id) {
+            appState.storyDrafts = appState.storyDrafts.filter(s => s.id !== id);
+            renderStoryDrafts();
+            showToast('Deleted', 'Story draft removed.');
+        }
+
+        function deleteBioLink(id) {
+            appState.bioProfile.links = appState.bioProfile.links.filter(l => l.id !== id);
+            renderBioHub();
+            showToast('Deleted', 'Link removed.');
+        }
+
+        function publishBioChanges() {
+            appState.bioProfile.name = document.getElementById('bio-edit-name').value;
+            appState.bioProfile.tagline = document.getElementById('bio-edit-tagline').value;
+            appState.bioProfile.avatar = document.getElementById('bio-edit-avatar').value;
+            renderPublicProfile();
+            showToast('Profile Published', 'Public Link-in-Bio updated.');
+        }
+
+        function showToast(title, desc) {
+            const toast = document.getElementById('toast-notification');
+            document.getElementById('toast-title').innerText = title;
+            document.getElementById('toast-desc').innerText = desc;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        // Init App
+        window.onload = function() {
+            renderFilterLibrary();
+            selectArFilter('crown');
+            renderVaultGrid();
+            renderStoryDrafts();
+            renderBioHub();
+        };
+    </script>
+</body>
+</html>
