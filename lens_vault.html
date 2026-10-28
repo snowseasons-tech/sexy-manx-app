@@ -1201,6 +1201,9 @@
         FACE_LENSES.forEach(l => AR_FILTERS.push({ ...l, category: 'face', visual: faceVisual(l.icon, l.name), meshClass: 'border-white/60', fxClass: '' }));
 
         // --- Face tracking (MediaPipe Face Landmarker, loaded the first time a face lens is used) ---
+        // Escapes user-controlled text before it is put into innerHTML
+        function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
         const MEDIAPIPE_VERSION = '0.10.14';
         const FACE_MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
         let faceLandmarker = null;
@@ -1209,17 +1212,20 @@
         let lastVideoTime = -1;
         let faceUiState = null;
         let faceTrackerCpuOnly = false;
-        let faceTrackerWarned = false;
+        let faceLoadWarned = false;
+        let faceDetectWarned = false;
+        let faceLoadFailures = 0;
+        let faceTrackerFailedAt = -Infinity;
 
         function loadFaceTracker() {
-            if (!faceTrackerLoading) {
+            if (!faceTrackerLoading && performance.now() - faceTrackerFailedAt >= 15000 && faceLoadFailures < 3) {
                 faceTrackerLoading = (async () => {
                     const probe = document.createElement('canvas');
                     if (!probe.getContext('webgl2') && !probe.getContext('webgl')) {
                         throw new Error('this browser has WebGL turned off. Turn on hardware acceleration in its settings and reload.');
                     }
                     const base = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}`;
-                    const { FaceLandmarker, FilesetResolver } = await import(base);
+                    const { FaceLandmarker, FilesetResolver } = await import(`${base}/vision_bundle.mjs`);
                     const fileset = await FilesetResolver.forVisionTasks(`${base}/wasm`);
                     const options = delegate => ({ baseOptions: { modelAssetPath: FACE_MODEL_URL, delegate }, runningMode: 'VIDEO', numFaces: 3 });
                     if (!faceTrackerCpuOnly) {
@@ -1232,8 +1238,11 @@
                     }
                     faceLandmarker = await FaceLandmarker.createFromOptions(fileset, options('CPU'));
                 })().catch(err => {
-                    if (faceTrackerWarned) return;
-                    faceTrackerWarned = true;
+                    faceTrackerLoading = null;
+                    faceTrackerFailedAt = performance.now();
+                    faceLoadFailures++;
+                    if (faceLoadWarned) return;
+                    faceLoadWarned = true;
                     showToast('Face Tracking Off', 'Could not load face tracking: ' + err.message);
                 });
             }
@@ -1271,12 +1280,22 @@
             };
         }
 
+        let lensDrawWarned = false;
+
         function drawFaceLenses(ctx, lens, faces, vw, vh, W, H, t) {
             const map = makeFaceMapper(vw, vh, W, H);
             ctx.save();
             ctx.globalAlpha = appState.filterIntensity / 100;
-            faces.forEach(lm => lens.draw(ctx, buildFace(lm, map), t));
-            ctx.restore();
+            try {
+                faces.forEach(lm => lens.draw(ctx, buildFace(lm, map), t));
+            } catch (e) {
+                if (!lensDrawWarned) {
+                    console.warn('Error drawing lens:', e);
+                    lensDrawWarned = true;
+                }
+            } finally {
+                ctx.restore();
+            }
         }
 
         // Hide the placeholder graphic and fake mesh once a real face is being tracked
@@ -1291,6 +1310,7 @@
 
         function arLoop() {
             requestAnimationFrame(arLoop);
+            if (document.hidden) return;
             const video = document.getElementById('cam-video');
             const canvas = document.getElementById('ar-canvas');
             const lens = AR_FILTERS.find(f => f.id === appState.activeFilterId);
@@ -1320,12 +1340,16 @@
                     trackedFaces = [];
                     if (!faceTrackerCpuOnly) {
                         faceTrackerCpuOnly = true;
-                        faceLandmarker.close();
+                        try {
+                            faceLandmarker.close();
+                        } catch (closeErr) {
+                            console.error('Error closing faceLandmarker:', closeErr);
+                        }
                         faceLandmarker = null;
                         faceTrackerLoading = null;
                         loadFaceTracker();
-                    } else if (!faceTrackerWarned) {
-                        faceTrackerWarned = true;
+                    } else if (!faceDetectWarned) {
+                        faceDetectWarned = true;
                         showToast('Face Tracking Off', 'Face tracking failed in this browser: ' + err.message);
                     }
                 }
@@ -1371,6 +1395,10 @@
 
         // Tab Navigation
         function switchTab(tabId) {
+            if (appState.activeTab === 'camera' && tabId !== 'camera') {
+                stopCamera();
+                trackedFaces = [];
+            }
             appState.activeTab = tabId;
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
             document.getElementById('tab-' + tabId).classList.remove('hidden');
@@ -1389,6 +1417,10 @@
             const activeMobBtn = document.getElementById('mob-' + tabId);
             if(activeMobBtn) {
                 activeMobBtn.className = "mob-tab flex flex-col items-center text-amber-400 text-xs font-semibold";
+            }
+
+            if (tabId === 'camera' && !camStream) {
+                startCamera();
             }
 
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1509,17 +1541,59 @@
 
         // --- Live camera ---
         let camStream = null;
+        let camStartToken = 0;
+        let camStarting = false;
+
+        window.addEventListener('pagehide', () => stopCamera());
+        window.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                stopCamera();
+            } else if (appState.activeTab === 'camera') {
+                startCamera();
+            }
+        });
+
+        function stopCamera() {
+            camStartToken++;
+            if (camStream) {
+                camStream.getTracks().forEach(t => t.stop());
+                camStream = null;
+            }
+            const video = document.getElementById('cam-video');
+            video.srcObject = null;
+            video.classList.add('hidden');
+            document.getElementById('cam-enable-btn').classList.remove('hidden');
+            const bg = document.getElementById('cam-bg-gradient');
+            bg.style.zIndex = '';
+            bg.style.opacity = '';
+            bg.style.mixBlendMode = '';
+        }
 
         async function startCamera() {
+            if (camStarting) return;
+            camStarting = true;
+            camStartToken++;
+            const token = camStartToken;
+            if (camStream) {
+                camStream.getTracks().forEach(t => t.stop());
+                camStream = null;
+            }
             const video = document.getElementById('cam-video');
             const btn = document.getElementById('cam-enable-btn');
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                camStarting = false;
                 btn.classList.add('hidden');
                 showToast('Camera Unavailable', 'This browser can only use the camera on https:// or localhost.');
                 return;
             }
             try {
-                camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1080 }, height: { ideal: 1920 } }, audio: false });
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1080 }, height: { ideal: 1920 } }, audio: false });
+                // The tab was left or the camera was stopped while this request was pending: drop the new stream
+                if (token !== camStartToken || appState.activeTab !== 'camera') {
+                    stream.getTracks().forEach(t => t.stop());
+                    return;
+                }
+                camStream = stream;
                 video.srcObject = camStream;
                 video.classList.remove('hidden');
                 btn.classList.add('hidden');
@@ -1534,6 +1608,8 @@
                           : err.name === 'NotFoundError' ? 'No camera was found on this device.'
                           : 'Could not start the camera: ' + err.message;
                 showToast('Camera Off', msg);
+            } finally {
+                camStarting = false;
             }
         }
 
@@ -1655,6 +1731,11 @@
         }
 
         function captureArPhoto() {
+            if (!camStream) {
+                showToast('Camera Off', 'Camera is off, so there is nothing to capture. Tap "Turn on camera".');
+                return;
+            }
+
             const flash = document.getElementById('camera-flash');
             flash.style.opacity = '1';
             setTimeout(() => flash.style.opacity = '0', 150);
@@ -1689,7 +1770,7 @@
             };
             appState.vaultAssets.unshift(newAsset);
             renderVaultGrid();
-            showToast('Snapshot Saved', camStream ? 'Photo downloaded and saved to your Private Vault.' : 'Camera is off, so this capture has no photo. Tap "Turn on camera".');
+            showToast('Snapshot Saved', 'Photo downloaded and saved to your Private Vault.');
         }
 
         function saveCurrentPresetToVault() {
@@ -1731,14 +1812,14 @@
                             <span class="px-2.5 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider ${item.type === 'preset' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'}">
                                 ${item.type === 'preset' ? 'Lens Preset' : 'Media / LUT'}
                             </span>
-                            <span class="text-xs text-gray-400 font-mono">${item.size}</span>
+                            <span class="text-xs text-gray-400 font-mono">${esc(item.size)}</span>
                         </div>
-                        ${item.image ? `<img src="${item.image}" alt="${item.title}" class="w-full aspect-[9/16] object-cover rounded-xl mb-3 border border-white/10">` : ''}
-                        <h3 class="font-bold text-white text-base mb-1 group-hover:text-amber-400 transition">${item.title}</h3>
-                        <p class="text-xs text-gray-400 line-clamp-2">${item.desc}</p>
+                        ${item.image ? `<img src="${esc(item.image)}" alt="${esc(item.title)}" class="w-full aspect-[9/16] object-cover rounded-xl mb-3 border border-white/10">` : ''}
+                        <h3 class="font-bold text-white text-base mb-1 group-hover:text-amber-400 transition">${esc(item.title)}</h3>
+                        <p class="text-xs text-gray-400 line-clamp-2">${esc(item.desc)}</p>
                     </div>
                     <div class="pt-4 mt-4 border-t border-white/5 flex items-center justify-between text-xs">
-                        <span class="text-gray-400"><i class="fa-solid fa-chart-simple mr-1 text-amber-400"></i> ${item.metrics}</span>
+                        <span class="text-gray-400"><i class="fa-solid fa-chart-simple mr-1 text-amber-400"></i> ${esc(item.metrics)}</span>
                         <div class="flex items-center gap-2">
                             <button onclick="showToast('Downloading', 'Decrypting asset...')" class="p-2 rounded-lg bg-vault-700 hover:bg-vault-600 text-white transition"><i class="fa-solid fa-download text-xs"></i></button>
                             <button onclick="deleteVaultAsset(${item.id})" class="p-2 rounded-lg bg-vault-700 hover:bg-red-500/20 text-gray-300 hover:text-red-400 transition"><i class="fa-solid fa-trash text-xs"></i></button>
@@ -1768,14 +1849,14 @@
                 <div class="glass-card p-5 rounded-2xl border border-white/5 flex flex-col justify-between">
                     <div>
                         <div class="flex justify-between items-start mb-2">
-                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">${story.category}</span>
-                            <span class="text-xs text-gray-400">${story.date}</span>
+                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">${esc(story.category)}</span>
+                            <span class="text-xs text-gray-400">${esc(story.date)}</span>
                         </div>
-                        <h3 class="font-bold text-white text-base mb-2">${story.title}</h3>
-                        <p class="text-xs text-gray-300">${story.outline}</p>
+                        <h3 class="font-bold text-white text-base mb-2">${esc(story.title)}</h3>
+                        <p class="text-xs text-gray-300">${esc(story.outline)}</p>
                     </div>
                     <div class="pt-4 mt-4 border-t border-white/5 flex items-center justify-between">
-                        <span class="text-xs px-2.5 py-1 rounded-md bg-vault-800 text-amber-300 font-medium">Status: ${story.status}</span>
+                        <span class="text-xs px-2.5 py-1 rounded-md bg-vault-800 text-amber-300 font-medium">Status: ${esc(story.status)}</span>
                         <button onclick="deleteStoryDraft(${story.id})" class="text-gray-400 hover:text-red-400 text-xs transition"><i class="fa-solid fa-trash"></i> Delete</button>
                     </div>
                 </div>
@@ -1784,15 +1865,20 @@
             const tbody = document.getElementById('performance-table-body');
             tbody.innerHTML = appState.vaultAssets.map(item => `
                 <tr>
-                    <td class="py-3 font-medium text-white">${item.title}</td>
-                    <td class="py-3 capitalize">${item.type}</td>
-                    <td class="py-3 text-amber-400 font-semibold">${item.metrics}</td>
+                    <td class="py-3 font-medium text-white">${esc(item.title)}</td>
+                    <td class="py-3 capitalize">${esc(item.type)}</td>
+                    <td class="py-3 text-amber-400 font-semibold">${esc(item.metrics)}</td>
                     <td class="py-3"><span class="px-2 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Synced</span></td>
                     <td class="py-3 text-right">
-                        <button onclick="showToast('Analytics', 'Viewing metrics for ' + '${item.title}')" class="px-3 py-1 rounded-lg bg-vault-700 hover:bg-vault-600 text-xs text-white transition">Stats</button>
+                        <button onclick="showStats(${item.id})" class="px-3 py-1 rounded-lg bg-vault-700 hover:bg-vault-600 text-xs text-white transition">Stats</button>
                     </td>
                 </tr>
             `).join('');
+        }
+
+        function showStats(id) {
+            const item = appState.vaultAssets.find(a => a.id === id);
+            if (item) showToast('Analytics', 'Viewing metrics for ' + item.title);
         }
 
         function renderBioHub() {
@@ -1800,10 +1886,10 @@
             editorList.innerHTML = appState.bioProfile.links.map(link => `
                 <div class="flex items-center justify-between p-3 rounded-xl bg-vault-800 border border-white/5">
                     <div class="flex items-center gap-3 overflow-hidden">
-                        <i class="${link.icon} text-amber-400 text-sm"></i>
+                        <i class="${String(link.icon).replace(/[^a-z0-9 -]/gi, '')} text-amber-400 text-sm"></i>
                         <div class="truncate">
-                            <div class="text-sm font-medium text-white truncate">${link.title}</div>
-                            <div class="text-xs text-gray-400 truncate">${link.url}</div>
+                            <div class="text-sm font-medium text-white truncate">${esc(link.title)}</div>
+                            <div class="text-xs text-gray-400 truncate">${esc(link.url)}</div>
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
@@ -1832,7 +1918,7 @@
             const previewLinksContainer = document.getElementById('preview-links-container');
             previewLinksContainer.innerHTML = appState.bioProfile.links.map(link => `
                 <div class="w-full py-2.5 px-4 rounded-xl bg-vault-800 border border-white/10 text-xs font-semibold text-white flex items-center justify-between">
-                    <span class="flex items-center gap-2 truncate"><i class="${link.icon} text-amber-400"></i> ${link.title}</span>
+                    <span class="flex items-center gap-2 truncate"><i class="${String(link.icon).replace(/[^a-z0-9 -]/gi, '')} text-amber-400"></i> ${esc(link.title)}</span>
                     <i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-gray-400"></i>
                 </div>
             `).join('');
@@ -1845,8 +1931,8 @@
 
             const pubLinks = document.getElementById('pub-links-container');
             pubLinks.innerHTML = appState.bioProfile.links.map(link => `
-                <a href="${link.url}" target="_blank" onclick="trackOutboundClick(${link.id}, event)" class="w-full py-3.5 px-5 rounded-2xl bg-vault-800 hover:bg-vault-700 border border-white/10 text-sm font-semibold text-white flex items-center justify-between transition shadow-md group">
-                    <span class="flex items-center gap-3"><i class="${link.icon} text-amber-400 text-base group-hover:scale-110 transition"></i> ${link.title}</span>
+                <a href="${esc(link.url)}" target="_blank" onclick="trackOutboundClick(${link.id}, event)" class="w-full py-3.5 px-5 rounded-2xl bg-vault-800 hover:bg-vault-700 border border-white/10 text-sm font-semibold text-white flex items-center justify-between transition shadow-md group">
+                    <span class="flex items-center gap-3"><i class="${String(link.icon).replace(/[^a-z0-9 -]/gi, '')} text-amber-400 text-base group-hover:scale-110 transition"></i> ${esc(link.title)}</span>
                     <i class="fa-solid fa-arrow-up-right-from-square text-xs text-gray-400 group-hover:text-amber-400 transition"></i>
                 </a>
             `).join('');
@@ -1893,6 +1979,10 @@
             const url = document.getElementById('new-link-url').value;
             const icon = document.getElementById('new-link-icon').value || 'fa-solid fa-globe';
             if(!title || !url) return;
+            if(!/^https?:\/\//i.test(url)) {
+                showToast('Invalid Link', 'Links must start with http:// or https://.');
+                return;
+            }
             appState.bioProfile.links.push({ id: Date.now(), title, url, icon, clicks: 0 });
             renderBioHub();
             closeAddLinkModal();
