@@ -1,13 +1,28 @@
 import streamlit as st
 import html
+import hmac
 import json
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 # --- CONFIGURATION & DATABASE SETUP ---
-DB_FILE = "questions_db.json"
-PASSWORD = "snowbrooks"  # Secure password for your wife
+# Anchor data files to the app folder so it works no matter where it's launched from
+APP_DIR = Path(__file__).resolve().parent.parent
+DB_FILE = APP_DIR / "questions_db.json"
+
+
+def get_creator_password():
+    # Read from .streamlit/secrets.toml (or the Secrets box on Streamlit Cloud), then the CREATOR_PASSWORD env var
+    try:
+        password = st.secrets["creator_password"]
+    except Exception:
+        # No secrets file or no creator_password key: fall back to the environment variable
+        password = None
+    if not password:
+        password = os.environ.get("CREATOR_PASSWORD")
+    return str(password) if password else None
 
 THEMES = {
     "🌸 Pastel Pink Dream": {
@@ -113,7 +128,7 @@ def generate_snap_card(fan_name, question_text, theme_name, answer_text=""):
 
     draw.text((540, 1280), "SNAPCHAT DISCOVER FEEDS", fill=t["accent"], font=font_footer, anchor="ms")
 
-    output_path = "snap_story_card.png"
+    output_path = APP_DIR / "snap_story_card.png"
     img.save(output_path)
     return output_path
 
@@ -176,9 +191,18 @@ with tab_fan:
 # 2. CREATOR DASHBOARD
 with tab_creator:
     st.title("👑 Your Backstage Center")
-    access_password = st.text_input("Enter Access Password", type="password")
+    creator_password = get_creator_password()
+    if creator_password:
+        access_password = st.text_input("Enter Access Password", type="password")
+    else:
+        # Not configured: no password box and no access
+        st.warning(
+            "The Creator Dashboard is locked because no password is set. Close the app and run the start file "
+            "again (start.bat or start.sh) and it will ask you to choose one."
+        )
+        access_password = ""
 
-    if access_password == PASSWORD:
+    if access_password and hmac.compare_digest(access_password.encode(), creator_password.encode()):
         st.success("Access Granted.")
 
         st.subheader("🎨 Brand Customization")
