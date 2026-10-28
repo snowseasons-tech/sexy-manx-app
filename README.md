@@ -35,6 +35,7 @@ Lens Vault and SnapDex need an internet connection for their fonts, icons and fa
 ## Your data
 
 - Fan questions are saved in `questions_db.json` in this folder. Copy that file to back them up.
+- If that file is ever damaged, the app moves it aside as `questions_db.damaged-<date>.json` and starts a fresh one. Send the damaged file to your developer to recover its questions.
 - The name and stats in the sidebar come from `snapDex.json`. You can edit them in any text editor.
 
 ## Who can see it

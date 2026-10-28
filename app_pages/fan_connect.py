@@ -3,6 +3,7 @@ import html
 import hmac
 import json
 import os
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
@@ -39,32 +40,46 @@ THEMES = {
     }
 }
 
-# Safely read data without losing thread safety
+# One lock shared by every session. Pages re-run on each interaction, so it has to live in cache_resource
+@st.cache_resource
+def db_lock():
+    return threading.Lock()
+
 def read_json_file():
-    if not os.path.exists(DB_FILE) or os.path.getsize(DB_FILE) == 0:
-        with open(DB_FILE, "w") as f:
-            json.dump([], f)
-        return []
     try:
-        with open(DB_FILE, "r") as f:
+        with open(DB_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
+    except (FileNotFoundError, json.JSONDecodeError):
         return []
 
-# Thread-safe write utility
 def write_json_file(data):
-    with open(DB_FILE, "w") as f:
+    # Write to a temp file and swap it in, so readers never see a half-written file
+    tmp = DB_FILE.with_suffix(".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
+    os.replace(tmp, DB_FILE)
 
-# Streamlit-safe state management wrapper
 def load_questions():
     if "questions_list" not in st.session_state:
         st.session_state.questions_list = read_json_file()
     return st.session_state.questions_list
 
-def save_questions(questions):
+def update_questions(change):
+    # Read, change and write under the lock so simultaneous submissions can't overwrite each other
+    with db_lock():
+        try:
+            with open(DB_FILE, "r", encoding="utf-8") as f:
+                questions = json.load(f)
+        except FileNotFoundError:
+            questions = []
+        except json.JSONDecodeError:
+            # Never overwrite a damaged file: set it aside so its questions can be recovered
+            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            os.replace(DB_FILE, DB_FILE.with_name(f"questions_db.damaged-{stamp}.json"))
+            questions = []
+        change(questions)
+        write_json_file(questions)
     st.session_state.questions_list = questions
-    write_json_file(questions)
 
 # --- IMAGE GENERATOR FUNCTION ---
 def generate_snap_card(fan_name, question_text, theme_name, answer_text=""):
@@ -149,16 +164,16 @@ with tab_fan:
         submit_btn = st.form_submit_button("Send to Story Queue ✨")
 
         if submit_btn and question_text.strip():
-            updated_qs = read_json_file() # Fresh disk read on submission
-            updated_qs.append({
-                "id": max((q["id"] for q in updated_qs), default=0) + 1,
-                "fan_name": fan_name.strip() or "Anonymous",
-                "question_text": question_text.strip(),
-                "answer_text": "",
-                "status": "pending",
-                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
-            })
-            save_questions(updated_qs)
+            def add_question(qs):
+                qs.append({
+                    "id": max((q["id"] for q in qs), default=0) + 1,
+                    "fan_name": fan_name.strip() or "Anonymous",
+                    "question_text": question_text.strip(),
+                    "answer_text": "",
+                    "status": "pending",
+                    "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+                })
+            update_questions(add_question)
             st.success("Sent! Look at the feed below or check my Snap stories to see if I pick yours! 🎉")
             st.rerun()
 
@@ -232,12 +247,12 @@ with tab_creator:
 
                 with col2:
                     if st.button("Publish to Discover Feed 🚀", key=f"pub_{q['id']}"):
-                        current_all_qs = read_json_file()
-                        for item in current_all_qs:
-                            if item["id"] == q["id"]:
-                                item["status"] = "published"
-                                item["answer_text"] = creator_reply if creator_reply else "Answered directly on stories!"
-                        save_questions(current_all_qs)
+                        def publish(qs, qid=q["id"]):
+                            for item in qs:
+                                if item["id"] == qid:
+                                    item["status"] = "published"
+                                    item["answer_text"] = creator_reply if creator_reply else "Answered directly on stories!"
+                        update_questions(publish)
                         st.success("Published! It is now live on your fan feed.")
                         st.rerun()
                 st.markdown("---")
