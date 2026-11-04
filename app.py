@@ -1,8 +1,9 @@
 import json
+from pathlib import Path
 
 import streamlit as st
 
-PROFILE_FILE = "snapDex.json"
+PROFILE_FILE = Path(__file__).parent / "snapDex.json"
 
 
 @st.cache_data(ttl=60)

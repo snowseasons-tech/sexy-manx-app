@@ -1,13 +1,29 @@
 import streamlit as st
 import html
+import hmac
 import json
 import os
+import threading
 from datetime import datetime, timezone
+from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 # --- CONFIGURATION & DATABASE SETUP ---
-DB_FILE = "questions_db.json"
-PASSWORD = "snowbrooks"  # Secure password for your wife
+# Anchor data files to the app folder so it works no matter where it's launched from
+APP_DIR = Path(__file__).resolve().parent.parent
+DB_FILE = APP_DIR / "questions_db.json"
+
+
+def get_creator_password():
+    # Read from .streamlit/secrets.toml (or the Secrets box on Streamlit Cloud), then the CREATOR_PASSWORD env var
+    try:
+        password = st.secrets["creator_password"]
+    except Exception:
+        # No secrets file or no creator_password key: fall back to the environment variable
+        password = None
+    if not password:
+        password = os.environ.get("CREATOR_PASSWORD")
+    return str(password) if password else None
 
 THEMES = {
     "🌸 Pastel Pink Dream": {
@@ -24,32 +40,46 @@ THEMES = {
     }
 }
 
-# Safely read data without losing thread safety
+# One lock shared by every session. Pages re-run on each interaction, so it has to live in cache_resource
+@st.cache_resource
+def db_lock():
+    return threading.Lock()
+
 def read_json_file():
-    if not os.path.exists(DB_FILE) or os.path.getsize(DB_FILE) == 0:
-        with open(DB_FILE, "w") as f:
-            json.dump([], f)
-        return []
     try:
-        with open(DB_FILE, "r") as f:
+        with open(DB_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
+    except (FileNotFoundError, json.JSONDecodeError):
         return []
 
-# Thread-safe write utility
 def write_json_file(data):
-    with open(DB_FILE, "w") as f:
+    # Write to a temp file and swap it in, so readers never see a half-written file
+    tmp = DB_FILE.with_suffix(".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
+    os.replace(tmp, DB_FILE)
 
-# Streamlit-safe state management wrapper
 def load_questions():
     if "questions_list" not in st.session_state:
         st.session_state.questions_list = read_json_file()
     return st.session_state.questions_list
 
-def save_questions(questions):
+def update_questions(change):
+    # Read, change and write under the lock so simultaneous submissions can't overwrite each other
+    with db_lock():
+        try:
+            with open(DB_FILE, "r", encoding="utf-8") as f:
+                questions = json.load(f)
+        except FileNotFoundError:
+            questions = []
+        except json.JSONDecodeError:
+            # Never overwrite a damaged file: set it aside so its questions can be recovered
+            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            os.replace(DB_FILE, DB_FILE.with_name(f"questions_db.damaged-{stamp}.json"))
+            questions = []
+        change(questions)
+        write_json_file(questions)
     st.session_state.questions_list = questions
-    write_json_file(questions)
 
 # --- IMAGE GENERATOR FUNCTION ---
 def generate_snap_card(fan_name, question_text, theme_name, answer_text=""):
@@ -113,7 +143,7 @@ def generate_snap_card(fan_name, question_text, theme_name, answer_text=""):
 
     draw.text((540, 1280), "SNAPCHAT DISCOVER FEEDS", fill=t["accent"], font=font_footer, anchor="ms")
 
-    output_path = "snap_story_card.png"
+    output_path = APP_DIR / "snap_story_card.png"
     img.save(output_path)
     return output_path
 
@@ -134,16 +164,16 @@ with tab_fan:
         submit_btn = st.form_submit_button("Send to Story Queue ✨")
 
         if submit_btn and question_text.strip():
-            updated_qs = read_json_file() # Fresh disk read on submission
-            updated_qs.append({
-                "id": max((q["id"] for q in updated_qs), default=0) + 1,
-                "fan_name": fan_name.strip() or "Anonymous",
-                "question_text": question_text.strip(),
-                "answer_text": "",
-                "status": "pending",
-                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
-            })
-            save_questions(updated_qs)
+            def add_question(qs):
+                qs.append({
+                    "id": max((q["id"] for q in qs), default=0) + 1,
+                    "fan_name": fan_name.strip() or "Anonymous",
+                    "question_text": question_text.strip(),
+                    "answer_text": "",
+                    "status": "pending",
+                    "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+                })
+            update_questions(add_question)
             st.success("Sent! Look at the feed below or check my Snap stories to see if I pick yours! 🎉")
             st.rerun()
 
@@ -176,9 +206,18 @@ with tab_fan:
 # 2. CREATOR DASHBOARD
 with tab_creator:
     st.title("👑 Your Backstage Center")
-    access_password = st.text_input("Enter Access Password", type="password")
+    creator_password = get_creator_password()
+    if creator_password:
+        access_password = st.text_input("Enter Access Password", type="password")
+    else:
+        # Not configured: no password box and no access
+        st.warning(
+            "The Creator Dashboard is locked because no password is set. Close the app and run the start file "
+            "again (start.bat or start.sh) and it will ask you to choose one."
+        )
+        access_password = ""
 
-    if access_password == PASSWORD:
+    if access_password and hmac.compare_digest(access_password.encode(), creator_password.encode()):
         st.success("Access Granted.")
 
         st.subheader("🎨 Brand Customization")
@@ -208,12 +247,12 @@ with tab_creator:
 
                 with col2:
                     if st.button("Publish to Discover Feed 🚀", key=f"pub_{q['id']}"):
-                        current_all_qs = read_json_file()
-                        for item in current_all_qs:
-                            if item["id"] == q["id"]:
-                                item["status"] = "published"
-                                item["answer_text"] = creator_reply if creator_reply else "Answered directly on stories!"
-                        save_questions(current_all_qs)
+                        def publish(qs, qid=q["id"]):
+                            for item in qs:
+                                if item["id"] == qid:
+                                    item["status"] = "published"
+                                    item["answer_text"] = creator_reply if creator_reply else "Answered directly on stories!"
+                        update_questions(publish)
                         st.success("Published! It is now live on your fan feed.")
                         st.rerun()
                 st.markdown("---")
